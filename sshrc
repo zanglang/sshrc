@@ -24,77 +24,75 @@ function sshrc() {
 
     read_t_argument "$@"
     local SSHHOME=${SSHHOME:=~}
-    if [ -f $SSHHOME/.sshrc ]; then
-        if [ "$T_ARG" ]; then
-            export SSHHOMETMP=$(mktemp -d -t .$(whoami).sshhome.XXXX)
-            trap "rm -rf $SSHHOMETMP; exit" 0
-            cat $SSHHOME/.sshrc > $SSHHOMETMP/.sshrc
-            echo "$T_ARG && exit || exit" >> $SSHHOMETMP/.sshrc
-            ln -s $SSHHOME/.sshrc.d $SSHHOMETMP/.sshrc.d
-            export SSHHOME=$SSHHOMETMP
-            WELCOME_MESSAGE=""
-            SSHRC_QUIET="-o LogLevel=QUIET"
-            SSHRC_ACTIVATE_BIN=""
-        else
-            WELCOME_MESSAGE="
-              if [ -e /etc/motd ]; then cat /etc/motd; fi
-              if [ -e /etc/update-motd.d ]; then run-parts /etc/update-motd.d/ 2>/dev/null; fi
-              "
-            SSHRC_QUIET=""
-            SSHRC_ACTIVATE_BIN="chmod +x \$SSHHOME/sshrc"
-        fi
-        local files=.sshrc
-        if [ -d $SSHHOME/.sshrc.d ]; then
-            files="$files .sshrc.d"
-        fi
-        SIZE=$(tar cz -h -C $SSHHOME $files | wc -c)
-        if [ $SIZE -gt 65536 ]; then
-            echo >&2 $'.sshrc.d and .sshrc files must be less than 64kb\ncurrent size: '$SIZE' bytes'
-            exit 1
-        fi
-        ssh $SSHRC_QUIET -t $SSHRC_ARGS "
-            command -v openssl >/dev/null 2>&1 || { echo >&2 \"sshrc requires openssl to be installed on the server, but it's not. Aborting.\"; exit 1; }
-            $WELCOME_MESSAGE
-            export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXX)
-            export SSHRCCLEANUP=\$SSHHOME
-            trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-            echo $'"$(cat "$0" | openssl enc -base64)"' | tr -s ' ' $'\n' | openssl enc -base64 -d > \$SSHHOME/sshrc
-            $SSHRC_ACTIVATE_BIN
-
-            echo $'"$( cat << 'EOF' | openssl enc -base64
-                if [ -r /etc/profile ]; then source /etc/profile; fi
-                if [ -r ~/.bash_profile ]; then source ~/.bash_profile
-                elif [ -r ~/.bash_login ]; then source ~/.bash_login
-                elif [ -r ~/.profile ]; then source ~/.profile
-                fi
-                export PATH=$PATH:$SSHHOME
-                source $SSHHOME/.sshrc;
-EOF
-                )"' | tr -s ' ' $'\n' | openssl enc -base64 -d > \$SSHHOME/sshrc.bashrc
-
-            echo $'"$( cat << 'EOF' | openssl enc -base64
-                #!/usr/bin/env bash
-                exec bash --rcfile <(echo '
-                [ -r /etc/profile ] && source /etc/profile
-                if [ -r ~/.bash_profile ]; then source ~/.bash_profile
-                elif [ -r ~/.bash_login ]; then source ~/.bash_login
-                elif [ -r ~/.profile ]; then source ~/.profile
-                fi
-                source '$SSHHOME'/.sshrc;
-                export PATH=$PATH:'$SSHHOME'
-                ') "$@"
-EOF
-                )"' | tr -s ' ' $'\n' | openssl enc -base64 -d > \$SSHHOME/bashsshrc
-            chmod +x \$SSHHOME/bashsshrc
-
-            echo $'"$(tar cz -h -C $SSHHOME $files | openssl enc -base64)"' | tr -s ' ' $'\n' | openssl enc -base64 -d | tar mxz -C \$SSHHOME
-            export SSHHOME=\$SSHHOME
-            bash --rcfile \$SSHHOME/sshrc.bashrc
-            "
+    if [ ! -f $SSHHOME/.sshrc ]; then
+        touch $SSHHOME/.sshrc
+    fi
+    if [ "$T_ARG" ]; then
+        export SSHHOMETMP=$(mktemp -d -t .$(whoami).sshhome.XXXX)
+        trap "rm -rf $SSHHOMETMP; exit" 0
+        cat $SSHHOME/.sshrc > $SSHHOMETMP/.sshrc
+        echo "$T_ARG && exit || exit" >> $SSHHOMETMP/.sshrc
+        ln -s $SSHHOME/.sshrc.d $SSHHOMETMP/.sshrc.d
+        export SSHHOME=$SSHHOMETMP
+        WELCOME_MESSAGE=""
+        SSHRC_QUIET="-o LogLevel=QUIET"
+        SSHRC_ACTIVATE_BIN=""
     else
-        echo "No such file: $SSHHOME/.sshrc" >&2
+        WELCOME_MESSAGE="
+          if [ -e /etc/motd ]; then cat /etc/motd; fi
+          if [ -e /etc/update-motd.d ]; then run-parts /etc/update-motd.d/ 2>/dev/null; fi
+          "
+        SSHRC_QUIET=""
+        SSHRC_ACTIVATE_BIN="chmod +x \$SSHHOME/sshrc"
+    fi
+    local files=.sshrc
+    if [ -d $SSHHOME/.sshrc.d ]; then
+        files="$files .sshrc.d"
+    fi
+    SIZE=$(tar cz -h -C $SSHHOME $files | wc -c)
+    if [ $SIZE -gt 65536 ]; then
+        echo >&2 $'.sshrc.d and .sshrc files must be less than 64kb\ncurrent size: '$SIZE' bytes'
         exit 1
     fi
+    ssh $SSHRC_QUIET -t $SSHRC_ARGS "
+        command -v openssl >/dev/null 2>&1 || { echo >&2 \"sshrc requires openssl to be installed on the server, but it's not. Aborting.\"; exit 1; }
+        $WELCOME_MESSAGE
+        export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXX)
+        export SSHRCCLEANUP=\$SSHHOME
+        trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
+        echo $'"$(cat "$0" | openssl enc -base64)"' | tr -s ' ' $'\n' | openssl enc -base64 -d > \$SSHHOME/sshrc
+        $SSHRC_ACTIVATE_BIN
+
+        echo $'"$( cat << 'EOF' | openssl enc -base64
+            if [ -r /etc/profile ]; then source /etc/profile; fi
+            if [ -r ~/.bash_profile ]; then source ~/.bash_profile
+            elif [ -r ~/.bash_login ]; then source ~/.bash_login
+            elif [ -r ~/.profile ]; then source ~/.profile
+            fi
+            export PATH=$PATH:$SSHHOME
+            source $SSHHOME/.sshrc;
+EOF
+            )"' | tr -s ' ' $'\n' | openssl enc -base64 -d > \$SSHHOME/sshrc.bashrc
+
+        echo $'"$( cat << 'EOF' | openssl enc -base64
+            #!/usr/bin/env bash
+            exec bash --rcfile <(echo '
+            [ -r /etc/profile ] && source /etc/profile
+            if [ -r ~/.bash_profile ]; then source ~/.bash_profile
+            elif [ -r ~/.bash_login ]; then source ~/.bash_login
+            elif [ -r ~/.profile ]; then source ~/.profile
+            fi
+            source '$SSHHOME'/.sshrc;
+            export PATH=$PATH:'$SSHHOME'
+            ') "$@"
+EOF
+            )"' | tr -s ' ' $'\n' | openssl enc -base64 -d > \$SSHHOME/bashsshrc
+        chmod +x \$SSHHOME/bashsshrc
+
+        echo $'"$(tar cz -h -C $SSHHOME $files | openssl enc -base64)"' | tr -s ' ' $'\n' | openssl enc -base64 -d | tar mxz -C \$SSHHOME
+        export SSHHOME=\$SSHHOME
+        bash --rcfile \$SSHHOME/sshrc.bashrc
+        "
 }
 
 if [ "$1" ]; then
