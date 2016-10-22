@@ -2,17 +2,18 @@
 
 show_help() {
 cat >&2 <<EOF
-Usage: sshrc [OPTIONS] SSH_ARGS...
-Description: Carry your dotfiles with you.
+Usage: sshrc [OPTIONS] [SSH_ARGS...]
 
 Options:
-  --arg-max=BYTES     Ensure SSH_CMD is less than BYTES in size;
-                      SSH_CMD is comprised of the compressed sshrc bootstrap
-                      script, including .sshrc and the contents of .sshrc.d
-  -h, --help          Display this help message and exit
+  --arg-max=BYTES   Ensure SSHRC_CMD is less than BYTES in size
+                    Default is 65536 (64kb); set to 0 to disable this check
+  --hushlogin       Supress any motd welcome message
+                    This can also be accomplished by adding a .hushlogin
+                    file to .sshrc.d
+  -h, --help        Display this help message and exit
 
-SSH arguments:
-  see ssh(1)
+SSH_ARGS:
+  See ssh(1)
 EOF
 }
 
@@ -32,8 +33,8 @@ minify() {
 check_size() {
   local LC_ALL=C size="${#1}"
 
-  [[ "${ARG_MAX}" == 0 ]] && return
-  if [[ "${size}" -gt "${ARG_MAX:=$(( 65 * 1024 ))}" ]]; then
+  [[ "${arg_max:=$(( 65 * 1024 ))}" == 0 ]] && return
+  if [[ "${size}" -gt "${arg_max}" ]]; then
     echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
       "script is greater than 64kb"
     echo >&2 "Current size: ${size} bytes"
@@ -52,7 +53,7 @@ sshrc_cmd() {
   fi
   [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
 
-  if [[ "$#" -le 1 && ! -e "${SSHHOME}/.sshrc.d/.hushlogin" ]]; then
+  if [[ "$#" -le 1 && "${hushlogin}" == "false" ]]; then
     welcome="[ ! -e \"\$HOME/.hushlogin\" -a -e /etc/motd ] && cat /etc/motd"
   else
     welcome=""
@@ -71,7 +72,7 @@ sshrc_cmd() {
   source \$SSHHOME/.sshrc"
 
   bootstrap="
-  # Copy .sshrc and .sshrc.d; clean up when leaving
+  # Create SSHHOME, copy .sshrc and .sshrc.d, and clean up when leaving
   export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
   export SSHRCCLEANUP=\$SSHHOME
   trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
@@ -108,7 +109,9 @@ sshrc_cmd() {
 }
 
 main() {
-  local ssh_args host sshrc_cmd cmd size
+  local ssh_args host sshrc_cmd cmd size hushlogin arg_max
+  hushlogin="false"
+  [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
       -)
@@ -118,11 +121,14 @@ main() {
             exit 0
             ;;
           arg-max)
-            ARG_MAX="${!OPTIND}"
+            arg_max="${!OPTIND}"
             OPTIND=$(( OPTIND + 1 ))
             ;;
           arg-max=*)
-            ARG_MAX="${OPTARG#*=}"
+            arg_max="${OPTARG#*=}"
+            ;;
+          hushlogin)
+            hushlogin="true"
             ;;
           *)
             if [ "$OPTERR" = 1 ]; then
