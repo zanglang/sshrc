@@ -11,6 +11,7 @@ Options:
   --hushlogin       Supress any motd welcome message
                     This can also be accomplished by creating a .hushlogin
                     file ing \$SSHHOME/.sshrc.d
+  --bin             Copy the sshrc script to the remote host
   --debug[=LEVEL]   Print out debug info
                     LEVEL 1 prints the SSHRC_CMD
                     LEVEL 2 prints the uncompressed bootstrap script
@@ -65,6 +66,7 @@ set_sshrc_cmd() {
   fi
   [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
 
+  # Optionally hide welcome messages
   if [[ "$#" -le 1 && "${hushlogin}" != "true" ]]; then
     welcome="[ ! -e \"\$HOME/.hushlogin\" -a -e /etc/motd ] && cat /etc/motd"
   fi
@@ -81,6 +83,7 @@ set_sshrc_cmd() {
   export PATH=\$PATH:\$SSHHOME
   source \$SSHHOME/.sshrc"
 
+  # Optionally copy sshrc binary, so we can run sshrc again from the new host
   if [[ "${bin}" == "true" ]]; then
     binary="
     echo $'$(minify "$(cat "$0")" | $(encoder))' \
@@ -97,8 +100,6 @@ set_sshrc_cmd() {
   echo $'$(tar c -h -C "${SSHHOME}" ${files} | $(encoder))' \
     | \$(encoder -d) \
     | tar mx -C \$SSHHOME
-
-  # Optionally copy sshrc binary, so we can run sshrc again from the new host
   ${binary}
 
   # Create a wrapper around bash and use that as the shell
@@ -106,10 +107,8 @@ set_sshrc_cmd() {
   chmod +x \$SSHHOME/sshrcsh
   SHELL=\$SSHHOME/sshrcsh
 
-  # Optionally display a welcome message
-  ${welcome}
-
   # Start the shell
+  ${welcome}
   \$SSHHOME/sshrcsh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
 
   if [[ "${debug}" == 2 ]]; then
