@@ -1,32 +1,7 @@
 #!/usr/bin/env bash
 
 function ssh_cmd() {
-  # Bail if openssl isn't installed on the remote host
-  echo "
-  if [[ ! \$(command -v openssl) ]]; then
-    echo >&2 \"error: sshrc requires openssl to be installed on the server\"
-    exit 1
-  fi"
-
-  # Copy .sshrc and .sshrc.d; clean up when leaving
-  echo "
-  export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-  export SSHRCCLEANUP=\$SSHHOME
-  trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-  echo $'"$(tar cz -h -C "${SSHHOME}" ${files:=$1} | openssl enc -base64)"' \
-    | tr -s ' ' $'\n' \
-    | openssl enc -base64 -d \
-    | tar mxz -C \$SSHHOME"
-
-  # Copy sshrc binary, so we can run sshrc again from the new host
-  echo "
-  echo $'"$(cat "$0" | openssl enc -base64)"' \
-    | tr -s ' ' $'\n' \
-    | openssl enc -base64 -d > \$SSHHOME/sshrc
-  chmod +x \$SSHHOME/sshrc"
-
-  # Copy bootstrap rcfile
-  local bootstrap="
+  local rc="
   [[ -r /etc/profile ]] && source /etc/profile
   if [[ -r ~/.bash_profile ]]; then
     source ~/.bash_profile
@@ -37,20 +12,43 @@ function ssh_cmd() {
   fi
   export PATH=\$PATH:\$SSHHOME
   source \$SSHHOME/.sshrc"
-  echo "
-  echo $'"$(echo "${bootstrap}" | openssl enc -base64)"' \
-    | tr -s ' ' $'\n' \
-    | openssl enc -base64 -d > \$SSHHOME/sshrc.bootstrap"
+
+  local bootstrap="
+  # Copy .sshrc and .sshrc.d; clean up when leaving
+  export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
+  export SSHRCCLEANUP=\$SSHHOME
+  trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
+  echo $'$(tar c -h -C "${SSHHOME}" ${files:=$1} | openssl enc -base64)' \
+    | openssl enc -base64 -d \
+    | tar mx -C \$SSHHOME
+
+  # Copy sshrc binary, so we can run sshrc again from the new host
+  echo $'$(cat "$0" | openssl enc -base64)' \
+    | openssl enc -base64 -d > \$SSHHOME/sshrc
+  chmod +x \$SSHHOME/sshrc
+
+  # Copy bootstrap rcfile
+  echo $'${rc}' > \$SSHHOME/sshrc.rc
 
   # Create a wrapper around bash and use that as the shell
-  echo "
-  echo $'"$(echo "bash --rcfile \$SSHHOME/sshrc.bootstrap \"\$@\"" | openssl enc -base64)"' \
-    | tr -s ' ' $'\n' \
-    | openssl enc -base64 -d > \$SSHHOME/sshrcsh
+  echo 'bash --rcfile \$SSHHOME/sshrc.rc \"\$@\"' > \$SSHHOME/sshrcsh
   chmod +x \$SSHHOME/sshrcsh
   SHELL=\$SSHHOME/sshrcsh
-  [[ -e /etc/motd ]] && cat /etc/motd
+  [ -e /etc/motd ] && cat /etc/motd
   \$SSHHOME/sshrcsh"
+
+  echo "
+  # Bail if openssl isn't installed on the remote host
+  if [ ! \$(command -v openssl) ]; then
+    echo >&2 \"error: sshrc requires openssl to be installed on the server\"
+    exit 1
+  fi
+
+  # Compress bootstrap script for faster ssh connection and reduced risk of
+  # ssh command being rejected by the server
+  eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c | openssl enc -base64)' \
+    | openssl enc -base64 -d \
+    | gzip -d)\""
 }
 
 function main() {
