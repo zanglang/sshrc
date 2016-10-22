@@ -11,7 +11,9 @@ Options:
   --hushlogin       Supress any motd welcome message
                     This can also be accomplished by creating a .hushlogin
                     file ing \$SSHHOME/.sshrc.d
-  --debug           Print the uncompressed SSHRC_CMD and exit
+  --debug[=LEVEL]   Print out debug info
+                    LEVEL 1 prints the SSHRC_CMD
+                    LEVEL 2 prints the uncompressed bootstrap script
   -h, --help        Display this help message and exit
 
 SSH_ARGS:
