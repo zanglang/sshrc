@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-function ssh_cmd() {
-  local rc="
+ssh_cmd() {
+  local rc bootstrap
+
+  rc="
   [[ -r /etc/profile ]] && source /etc/profile
   if [[ -r ~/.bash_profile ]]; then
     source ~/.bash_profile
@@ -13,7 +15,7 @@ function ssh_cmd() {
   export PATH=\$PATH:\$SSHHOME
   source \$SSHHOME/.sshrc"
 
-  local bootstrap="
+  bootstrap="
   # Copy .sshrc and .sshrc.d; clean up when leaving
   export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
   export SSHRCCLEANUP=\$SSHHOME
@@ -23,7 +25,7 @@ function ssh_cmd() {
     | tar mx -C \$SSHHOME
 
   # Copy sshrc binary, so we can run sshrc again from the new host
-  echo $'$(cat "$0" | openssl enc -base64)' \
+  echo $'$(openssl enc -base64 < "$0")' \
     | openssl enc -base64 -d > \$SSHHOME/sshrc
   chmod +x \$SSHHOME/sshrc
 
@@ -39,8 +41,10 @@ function ssh_cmd() {
 
   echo "
   # Bail if openssl isn't installed on the remote host
-  if [ ! \$(command -v openssl) ]; then
-    echo >&2 \"error: sshrc requires openssl to be installed on the server\"
+  $(declare -f encode)
+  if [ ! \$(command -v encode) ]; then
+    echo >&2 \"Error: sshrc requires openssl or base64 to be installed \" \\
+      \"on the server\"
     exit 1
   fi
 
@@ -51,11 +55,29 @@ function ssh_cmd() {
     | gzip -d)\""
 }
 
-function main() {
-  [[ $# -lt 1 ]] && return $(ssh)
+encode() {
+  if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
+  elif [ "$(command -v base64)" ]; then base64 "$@"
+  fi
+}
 
-  if [[ ! $(command -v openssl) ]]; then
-    echo >&2 "error: sshrc requires openssl to be installed locally"
+check_size() {
+  local LC_ALL=C
+  size="${#1}"
+  if [ "${size}" -gt $(( 65 * 1024 )) ]; then
+    echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
+      "script must be less than 64kb"
+    echo "Current size: ${size} bytes"
+    exit 1
+  fi
+}
+
+main() {
+  local files cmd size
+  [[ $# -lt 1 ]] && return "$(ssh)"
+
+  if [[ ! $(command -v encode) ]]; then
+    echo >&2 "Error: sshrc requires openssl or base64 to be installed locally"
     exit 1
   fi
 
@@ -65,24 +87,18 @@ function main() {
     done
   fi
 
-  local files
   if [[ -f "${SSHHOME}/.sshrc" ]]; then
     files="${files} .sshrc"
   else
-    echo >&2 "error: could not find .sshrc in current directory or $HOME"
+    echo >&2 "Error: could not find .sshrc in current directory or ${HOME}"
     exit 1
   fi
   [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
 
-  local size=$(tar cz -h -C "${SSHHOME}" ${files} | wc -c)
-  if [ "${size}" -gt 65536 ]; then
-    echo >&2 "
-    error: .sshrc.d and .sshrc files must be less than 64kb
-    current size: ${size} bytes"
-    exit 1
-  fi
+  cmd="$(ssh_cmd "${files}")"
+  check_size "${cmd}"
 
-  ssh -t "$@" "$(ssh_cmd "${files}")"
+  ssh -t "$@" "${cmd}"
 }
 
 main "$@"
