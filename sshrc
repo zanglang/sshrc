@@ -11,6 +11,7 @@ Options:
   --hushlogin       Supress any motd welcome message
                     This can also be accomplished by creating a .hushlogin
                     file ing \$SSHHOME/.sshrc.d
+  --debug           Print the uncompressed SSHRC_CMD and exit
   -h, --help        Display this help message and exit
 
 SSH_ARGS:
@@ -18,10 +19,10 @@ SSH_ARGS:
 EOF
 }
 
-encode() {
+encoder() {
   # Use openssl or base64
-  if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
-  elif [ "$(command -v base64)" ]; then base64 "$@"
+  if  [ "$(command -v openssl)" ]; then echo "openssl enc -base64 $*"
+  elif [ "$(command -v base64)" ]; then echo "base64 $*"
   fi
 }
 
@@ -51,12 +52,7 @@ check_size() {
   fi
 }
 
-sshrc_cmd() {
-  # This is the remote command that sshrc passes to ssh. It is comprised of the
-  # compressed sshrc bootstrap script and the commands needed to decompress and
-  # run it. The .sshrc config file and files within .sshrc.d are embedded
-  # within the bootstrap script.
-
+set_sshrc_cmd() {
   local files welcome rc bootstrap
 
   if [[ -f "${SSHHOME}/.sshrc" ]]; then
@@ -67,10 +63,8 @@ sshrc_cmd() {
   fi
   [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
 
-  if [[ "$#" -le 1 && "${hushlogin}" == "false" ]]; then
+  if [[ "$#" -le 1 && "${hushlogin}" != "true" ]]; then
     welcome="[ ! -e \"\$HOME/.hushlogin\" -a -e /etc/motd ] && cat /etc/motd"
-  else
-    welcome=""
   fi
 
   rc="
@@ -90,13 +84,13 @@ sshrc_cmd() {
   export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
   export SSHRCCLEANUP=\$SSHHOME
   trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-  echo $'$(tar c -h -C "${SSHHOME}" ${files} | openssl enc -base64)' \
-    | openssl enc -base64 -d \
+  echo $'$(tar c -h -C "${SSHHOME}" ${files} | $(encoder))' \
+    | \$(encoder -d) \
     | tar mx -C \$SSHHOME
 
   # Copy sshrc binary, so we can run sshrc again from the new host
-  echo $'$(minify "$(cat "$0")" | openssl enc -base64)' \
-    | openssl enc -base64 -d > \$SSHHOME/sshrc
+  echo $'$(minify "$(cat "$0")" | $(encoder))' \
+    | \$(encoder -d) > \$SSHHOME/sshrc
   chmod +x \$SSHHOME/sshrc
 
   # Create a wrapper around bash and use that as the shell
@@ -106,10 +100,19 @@ sshrc_cmd() {
   $welcome
   \$SSHHOME/sshrcsh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
 
-  minify "
+  if [[ "${debug}" == 1 ]]; then
+    minify "${bootstrap}"
+    exit 0
+  fi
+
+  # This is the remote command that sshrc passes to ssh. It is comprised of the
+  # compressed sshrc bootstrap script and the commands needed to decompress and
+  # run it. The .sshrc config file and files within .sshrc.d are embedded
+  # within the bootstrap script.
+  sshrc_cmd="$(minify "
   # Bail if openssl isn't installed on the remote host
-  $(declare -f encode)
-  if [ ! \$(command -v encode) ]; then
+  $(declare -f encoder)
+  if [ -z \"\$(encoder)\" ]; then
     echo >&2 \"Error: sshrc requires openssl or base64 to be installed \" \\
       \"on the server\"
     exit 1
@@ -117,14 +120,19 @@ sshrc_cmd() {
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
-  eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c | openssl enc -base64)' \
-    | openssl enc -base64 -d \
-    | gzip -d)\""
+  eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c | $(encoder))' \
+    | \$(encoder -d) \
+    | gzip -d)\"")"
+
+  if [[ "${debug}" == 2 ]]; then
+    echo "${sshrc_cmd}"
+    exit 0
+  fi
 }
 
 main() {
-  local ssh_args host sshrc_cmd cmd size hushlogin arg_max show_size
-  hushlogin="false"
+  local ssh_args host sshrc_cmd cmd size \
+    hushlogin arg_max show_size debug
   [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
@@ -146,6 +154,12 @@ main() {
             ;;
           arg-size)
             show_size="true"
+            ;;
+          debug)
+            debug=1
+            ;;
+          debug=*)
+            debug="${OPTARG#*=}"
             ;;
           *)
             if [ "$OPTERR" = 1 ]; then
@@ -170,7 +184,7 @@ main() {
   shift
   cmd="$*"
 
-  if [[ ! $(command -v encode) ]]; then
+  if [[ -z "$(encoder)" ]]; then
     echo >&2 "Error: sshrc requires openssl or base64 to be installed locally"
     exit 1
   fi
@@ -181,7 +195,7 @@ main() {
     done
   fi
 
-  sshrc_cmd="$(sshrc_cmd "$cmd")"
+  set_sshrc_cmd "$cmd"
   check_size "${sshrc_cmd}"
 
   ssh -t ${ssh_args} "${host}" "${sshrc_cmd}"
