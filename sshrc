@@ -8,10 +8,10 @@ Options:
   --arg-max=BYTES   Ensure SSHRC_CMD is less than BYTES in size
                     Default is 65536 (64kb); set to 0 to disable this check
   --arg-size        Print the compressed size of SSHRC_CMD in bytes and exit
-  --hushlogin       Supress any motd welcome message
+  --hushlogin       Supress motd welcome messages
                     This can also be accomplished by creating a .hushlogin
                     file ing \$SSHHOME/.sshrc.d
-  --bin             Copy the sshrc script to the remote host
+  --bin             Copy this sshrc script to the remote host
   --debug[=LEVEL]   Print out debug info
                     LEVEL 1 prints the SSHRC_CMD
                     LEVEL 2 prints the uncompressed bootstrap script
@@ -22,23 +22,22 @@ SSH_ARGS:
 EOF
 }
 
+# Use openssl or base64
 encoder() {
-  # Use openssl or base64
   if  [ "$(command -v openssl)" ]; then echo "openssl enc -base64 $*"
   elif [ "$(command -v base64)" ]; then echo "base64 $*"
   fi
 }
 
+# Remove empty lines and full line comments
 minify() {
-  # Remove empty lines and full line comments
   echo "$1"| sed '/^\s*$/d; /^\s*#[^!]/d'
 }
 
+# Some shells (both locally and on the remote server) will complain if a
+# command is too large. Check to see if sshrc_cmd will exceed arg_max (default
+# to 64kb)
 check_size() {
-  # Some shells (both locally and on the remote server) will complain if a
-  # command is too large. Check to see if sshrc_cmd will exceed arg_max
-  # (default to 64kb)
-
   local LC_ALL=C size="${#1}"
 
   if [[ "${show_size}" == "true" ]]; then
@@ -86,7 +85,7 @@ set_sshrc_cmd() {
   # Optionally copy sshrc binary, so we can run sshrc again from the new host
   if [[ "${bin}" == "true" ]]; then
     binary="
-    echo $'$(minify "$(cat "$0")" | $(encoder))' \
+    echo $'$(minify < "$0" | $(encoder))' \
       | \$(encoder -d) > \$SSHHOME/sshrc
     chmod +x \$SSHHOME/sshrc
     "
@@ -177,8 +176,10 @@ main() {
             ;;
           *)
             if [ "$OPTERR" = 1 ]; then
-              echo "Invalid option --${OPTARG}" >&2
+              echo >&2 "Invalid option --${OPTARG}"
+              show_help
             fi
+            exit 1
             ;;
         esac;;
       b|c|D|E|e|F|I|i|J|L|l|m|O|o|p|Q|R|S|W|w)
