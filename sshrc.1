@@ -1,0 +1,49 @@
+.TH man 1 "22 October 2016" "1.0" "sshrc man page"
+.SH NAME
+sshrc \- carry your dotfiles with you
+.SH SYNOPSIS
+.B sshrc
+.nh
+[\fIOPTIONS\fR]
+[\fISSH_ARGS\fR...]
+
+.SH OPTIONS
+.TP
+.BI "\-\-arg\-max=" BYTES
+Ensure
+.B SSHRC_CMD
+is less than
+.I BYTES
+in size. Default is 65536 (64kb). Set to 0 to disable this check.
+
+.TP
+.B \-\-hushlogin
+Suppress any motd welcome message. This can also be accomplished by adding a .hushlogin file to .sshrc.d
+
+.TP
+.B \-h, \-\-help
+Display a help message and exit
+
+.SH SSHRC_CMD
+This is the remote command that sshrc passes to ssh. It is comprised of the compressed sshrc bootstrap script and the commands needed to decompress and run it. The .sshrc config file and files within .sshrc.d are embedded within the bootstrap script.
+.P
+If a remote command is passed to sshrc, it will be incorporated into the
+.B SSHRC_CMD
+and run after starting the shell.
+.P
+Some shells (both locally and on the remote server) will complain if this command is too large. For this reason, sshrc will refuse to run if the command exceeds 64kb. The threshold for this check can be modified or disabled with
+.BR \-\-arg-max .
+
+
+.SH EXAMPLES
+.B sshrc \-\-hushlogin user@host
+
+Log into remote server
+.B host
+as the user
+.B user
+and suppress any welcome message.
+
+.SH SEE ALSO
+\fBssh\fP(1) contains more information about
+.IR SSH_ARGS .
