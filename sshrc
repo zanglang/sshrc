@@ -17,20 +17,23 @@ SSH_ARGS:
 EOF
 }
 
-# Use openssl or base64
 encode() {
+  # Use openssl or base64
   if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
   elif [ "$(command -v base64)" ]; then base64 "$@"
   fi
 }
 
-# Remove empty lines and full line comments
 minify() {
+  # Remove empty lines and full line comments
   echo "$1"| sed '/^\s*$/d; /^\s*#[^!]/d'
 }
 
-# Ensure ssh_cmd will be less than 64kb
 check_size() {
+  # Some shells (both locally and on the remote server) will complain if a
+  # command is too large. Check to see if sshrc_cmd will exceed arg_max
+  # (default to 64kb)
+
   local LC_ALL=C size="${#1}"
 
   [[ "${arg_max:=$(( 65 * 1024 ))}" == 0 ]] && return
@@ -43,6 +46,11 @@ check_size() {
 }
 
 sshrc_cmd() {
+  # This is the remote command that sshrc passes to ssh. It is comprised of the
+  # compressed sshrc bootstrap script and the commands needed to decompress and
+  # run it. The .sshrc config file and files within .sshrc.d are embedded
+  # within the bootstrap script.
+
   local files welcome rc bootstrap
 
   if [[ -f "${SSHHOME}/.sshrc" ]]; then
@@ -167,7 +175,6 @@ main() {
   sshrc_cmd="$(sshrc_cmd "$cmd")"
   check_size "${sshrc_cmd}"
 
-  #echo "${sshrc_cmd}"
   ssh -t ${ssh_args} "${host}" "${sshrc_cmd}"
 }
 
