@@ -104,7 +104,6 @@ set_sshrc_cmd() {
   # Create a wrapper around bash and use that as the shell
   echo 'bash --rcfile <(echo \"${rc}\") \"\$@\"' > \$SSHHOME/sshrcsh
   chmod +x \$SSHHOME/sshrcsh
-  SHELL=\$SSHHOME/sshrcsh
 
   # Start the shell
   ${welcome}
