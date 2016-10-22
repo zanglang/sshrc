@@ -31,7 +31,7 @@ encoder() {
 
 # Remove empty lines and full line comments
 minify() {
-  echo "$1"| sed '/^\s*$/d; /^\s*#[^!]/d'
+  sed '/^\s*$/d; /^\s*#[^!]/d'
 }
 
 # Some shells (both locally and on the remote server) will complain if a
@@ -111,7 +111,7 @@ set_sshrc_cmd() {
   \$SSHHOME/sshrcsh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
 
   if [[ "${debug}" == 2 ]]; then
-    minify "${bootstrap}"
+    echo "${bootstrap}" | minify
     exit 0
   fi
 
@@ -119,7 +119,7 @@ set_sshrc_cmd() {
   # compressed sshrc bootstrap script and the commands needed to decompress and
   # run it. The .sshrc config file and files within .sshrc.d are embedded
   # within the bootstrap script.
-  sshrc_cmd="$(minify "
+  sshrc_cmd="$(echo "
   # Bail if openssl isn't installed on the remote host
   $(declare -f encoder)
   if [ -z \"\$(encoder)\" ]; then
@@ -132,7 +132,7 @@ set_sshrc_cmd() {
   # risk of hitting command buffer length limit
   eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c | $(encoder))' \
     | \$(encoder -d) \
-    | gzip -d)\"")"
+    | gzip -d)\"" | minify)"
 
   if [[ "${debug}" == 1 ]]; then
     echo "${sshrc_cmd}"
