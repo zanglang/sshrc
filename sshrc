@@ -7,9 +7,10 @@ Usage: sshrc [OPTIONS] [SSH_ARGS...]
 Options:
   --arg-max=BYTES   Ensure SSHRC_CMD is less than BYTES in size
                     Default is 65536 (64kb); set to 0 to disable this check
+  --arg-size        Print the compressed size of SSHRC_CMD in bytes and exit
   --hushlogin       Supress any motd welcome message
-                    This can also be accomplished by adding a .hushlogin
-                    file to .sshrc.d
+                    This can also be accomplished by creating a .hushlogin
+                    file ing \$SSHHOME/.sshrc.d
   -h, --help        Display this help message and exit
 
 SSH_ARGS:
@@ -36,10 +37,15 @@ check_size() {
 
   local LC_ALL=C size="${#1}"
 
+  if [[ "${show_size}" == "true" ]]; then
+    echo "${size} bytes"
+    exit 0
+  fi
+
   [[ "${arg_max:=$(( 65 * 1024 ))}" == 0 ]] && return
   if [[ "${size}" -gt "${arg_max}" ]]; then
     echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
-      "script is greater than 64kb"
+      "bootstrap script is greater than 64kb"
     echo >&2 "Current size: ${size} bytes"
     exit 1
   fi
@@ -117,7 +123,7 @@ sshrc_cmd() {
 }
 
 main() {
-  local ssh_args host sshrc_cmd cmd size hushlogin arg_max
+  local ssh_args host sshrc_cmd cmd size hushlogin arg_max show_size
   hushlogin="false"
   [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
@@ -137,6 +143,9 @@ main() {
             ;;
           hushlogin)
             hushlogin="true"
+            ;;
+          arg-size)
+            show_size="true"
             ;;
           *)
             if [ "$OPTERR" = 1 ]; then
