@@ -15,19 +15,7 @@ You can use this to set environment variables, define functions, and run post-lo
 
 ## Installation
 
-#### OS X
-
-    $ brew install sshrc
-    
-#### Ubuntu (12.04 or 14.04+)
-
-    $ sudo add-apt-repository ppa:russell-s-stewart/ppa
-    $ sudo apt-get update
-    $ sudo apt-get install sshrc
-    
-#### Everything else
-
-    $ wget https://raw.githubusercontent.com/Russell91/sshrc/master/sshrc && 
+    $ wget https://raw.githubusercontent.com/taylorskalyo/sshrc/master/sshrc && 
     chmod +x sshrc && 
     sudo mv sshrc /usr/local/bin #or anywhere else on your PATH
 
@@ -54,14 +42,14 @@ If you use tmux frequently, you can make sshrc work there as well. The following
     alias foo='echo I work with tmux, too'
     
     tmuxrc() {
-        local TMUXDIR=/tmp/russelltmuxserver
+        local TMUXDIR=/tmp/mytmuxserver
         if ! [ -d $TMUXDIR ]; then
             rm -rf $TMUXDIR
             mkdir -p $TMUXDIR
         fi
         rm -rf $TMUXDIR/.sshrc.d
-        cp -r $SSHHOME/.sshrc $SSHHOME/bashsshrc $SSHHOME/sshrc $SSHHOME/.sshrc.d $TMUXDIR
-        SSHHOME=$TMUXDIR SHELL=$TMUXDIR/bashsshrc /usr/bin/tmux -S $TMUXDIR/tmuxserver $@
+        cp -r $SSHHOME/.sshrc $SSHHOME/.sshrc.d $TMUXDIR
+        SSHHOME=$TMUXDIR /usr/bin/tmux -S $TMUXDIR/tmuxserver $@
     }
     export SHELL=`which bash`
     EOF
@@ -74,7 +62,13 @@ The -S option will start a separate tmux server. You can still safely access the
 
 ### Specializing .sshrc to individual servers
 
-You may have different configurations for different servers. I recommend the following structure for your ~/.sshrc control flow:
+You may have different configurations for different servers. I would recommend putting configurations in separate directories and then specifying which one to use with `SSHHOME`:
+
+    SSHHOME=~/.ssh/server1 sshrc server1
+    # or
+    cd ~/.ssh/server1 && sshrc server1
+
+You can also use the following structure for your ~/.sshrc control flow:
 
     if [ $(hostname | grep server1 | wc -l) == 1 ]; then
         echo 'server1'
@@ -92,6 +86,3 @@ You may have different configurations for different servers. I recommend the fol
 * For larger configurations, consider copying files to an obscure folder on the server and using ~/.sshrc to automatically source those configurations on login.
 
 * To enable tab completion in zsh, add `compdef sshrc=ssh` to your .zshrc file:
-
-
-[sshrc-git]: https://aur.archlinux.org/packages/sshrc-git
