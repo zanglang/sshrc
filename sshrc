@@ -55,7 +55,7 @@ check_size() {
 }
 
 set_sshrc_cmd() {
-  local files welcome rc bootstrap
+  local files welcome rc bootstrap binary
 
   if [[ -f "${SSHHOME}/.sshrc" ]]; then
     files="${files} .sshrc"
@@ -81,6 +81,14 @@ set_sshrc_cmd() {
   export PATH=\$PATH:\$SSHHOME
   source \$SSHHOME/.sshrc"
 
+  if [[ "${bin}" == "true" ]]; then
+    binary="
+    echo $'$(minify "$(cat "$0")" | $(encoder))' \
+      | \$(encoder -d) > \$SSHHOME/sshrc
+    chmod +x \$SSHHOME/sshrc
+    "
+  fi
+
   bootstrap="
   # Create SSHHOME, copy .sshrc and .sshrc.d, and clean up when leaving
   export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
@@ -90,19 +98,21 @@ set_sshrc_cmd() {
     | \$(encoder -d) \
     | tar mx -C \$SSHHOME
 
-  # Copy sshrc binary, so we can run sshrc again from the new host
-  echo $'$(minify "$(cat "$0")" | $(encoder))' \
-    | \$(encoder -d) > \$SSHHOME/sshrc
-  chmod +x \$SSHHOME/sshrc
+  # Optionally copy sshrc binary, so we can run sshrc again from the new host
+  ${binary}
 
   # Create a wrapper around bash and use that as the shell
   echo 'bash --rcfile <(echo \"${rc}\") \"\$@\"' > \$SSHHOME/sshrcsh
   chmod +x \$SSHHOME/sshrcsh
   SHELL=\$SSHHOME/sshrcsh
-  $welcome
+
+  # Optionally display a welcome message
+  ${welcome}
+
+  # Start the shell
   \$SSHHOME/sshrcsh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
 
-  if [[ "${debug}" == 1 ]]; then
+  if [[ "${debug}" == 2 ]]; then
     minify "${bootstrap}"
     exit 0
   fi
@@ -126,7 +136,7 @@ set_sshrc_cmd() {
     | \$(encoder -d) \
     | gzip -d)\"")"
 
-  if [[ "${debug}" == 2 ]]; then
+  if [[ "${debug}" == 1 ]]; then
     echo "${sshrc_cmd}"
     exit 0
   fi
@@ -134,7 +144,7 @@ set_sshrc_cmd() {
 
 main() {
   local ssh_args host sshrc_cmd cmd size \
-    hushlogin arg_max show_size debug
+    hushlogin arg_max show_size bin debug
   [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
@@ -156,6 +166,9 @@ main() {
             ;;
           arg-size)
             show_size="true"
+            ;;
+          bin)
+            bin="true"
             ;;
           debug)
             debug=1
