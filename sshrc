@@ -1,7 +1,62 @@
 #!/usr/bin/env bash
 
-ssh_cmd() {
-  local rc bootstrap
+show_help() {
+cat >&2 <<EOF
+Usage: sshrc [OPTIONS] SSH_ARGS...
+Description: Carry your dotfiles with you.
+
+Options:
+  --arg-max=BYTES     Ensure SSH_CMD is less than BYTES in size;
+                      SSH_CMD is comprised of the compressed sshrc bootstrap
+                      script, including .sshrc and the contents of .sshrc.d
+  -h, --help          Display this help message and exit
+
+SSH arguments:
+  see ssh(1)
+EOF
+}
+
+# Use openssl or base64
+encode() {
+  if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
+  elif [ "$(command -v base64)" ]; then base64 "$@"
+  fi
+}
+
+# Remove empty lines and full line comments
+minify() {
+  echo "$1"| sed '/^\s*$/d; /^\s*#[^!]/d'
+}
+
+# Ensure ssh_cmd will be less than 64kb
+check_size() {
+  local LC_ALL=C size="${#1}"
+
+  [[ "${ARG_MAX}" == 0 ]] && return
+  if [[ "${size}" -gt "${ARG_MAX:=$(( 65 * 1024 ))}" ]]; then
+    echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
+      "script is greater than 64kb"
+    echo >&2 "Current size: ${size} bytes"
+    exit 1
+  fi
+}
+
+sshrc_cmd() {
+  local files welcome rc bootstrap
+
+  if [[ -f "${SSHHOME}/.sshrc" ]]; then
+    files="${files} .sshrc"
+  else
+    echo >&2 "Error: could not find .sshrc in current directory or ${HOME}"
+    exit 1
+  fi
+  [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
+
+  if [[ "$#" -le 1 && ! -e "${SSHHOME}/.sshrc.d/.hushlogin" ]]; then
+    welcome="[ ! -e \"\$HOME/.hushlogin\" -a -e /etc/motd ] && cat /etc/motd"
+  else
+    welcome=""
+  fi
 
   rc="
   [[ -r /etc/profile ]] && source /etc/profile
@@ -20,26 +75,23 @@ ssh_cmd() {
   export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
   export SSHRCCLEANUP=\$SSHHOME
   trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-  echo $'$(tar c -h -C "${SSHHOME}" ${files:=$1} | openssl enc -base64)' \
+  echo $'$(tar c -h -C "${SSHHOME}" ${files} | openssl enc -base64)' \
     | openssl enc -base64 -d \
     | tar mx -C \$SSHHOME
 
   # Copy sshrc binary, so we can run sshrc again from the new host
-  echo $'$(openssl enc -base64 < "$0")' \
+  echo $'$(minify "$(cat "$0")" | openssl enc -base64)' \
     | openssl enc -base64 -d > \$SSHHOME/sshrc
   chmod +x \$SSHHOME/sshrc
 
-  # Copy bootstrap rcfile
-  echo $'${rc}' > \$SSHHOME/sshrc.rc
-
   # Create a wrapper around bash and use that as the shell
-  echo 'bash --rcfile \$SSHHOME/sshrc.rc \"\$@\"' > \$SSHHOME/sshrcsh
+  echo 'bash --rcfile <(echo \"${rc}\") \"\$@\"' > \$SSHHOME/sshrcsh
   chmod +x \$SSHHOME/sshrcsh
   SHELL=\$SSHHOME/sshrcsh
-  [ -e /etc/motd ] && cat /etc/motd
-  \$SSHHOME/sshrcsh"
+  $welcome
+  \$SSHHOME/sshrcsh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
 
-  echo "
+  minify "
   # Bail if openssl isn't installed on the remote host
   $(declare -f encode)
   if [ ! \$(command -v encode) ]; then
@@ -48,33 +100,52 @@ ssh_cmd() {
     exit 1
   fi
 
-  # Compress bootstrap script for faster ssh connection and reduced risk of
-  # ssh command being rejected by the server
+  # Compress bootstrap script for faster initial ssh connection and reduced
+  # risk of hitting command buffer length limit
   eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c | openssl enc -base64)' \
     | openssl enc -base64 -d \
     | gzip -d)\""
 }
 
-encode() {
-  if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
-  elif [ "$(command -v base64)" ]; then base64 "$@"
-  fi
-}
-
-check_size() {
-  local LC_ALL=C
-  size="${#1}"
-  if [ "${size}" -gt $(( 65 * 1024 )) ]; then
-    echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
-      "script must be less than 64kb"
-    echo "Current size: ${size} bytes"
-    exit 1
-  fi
-}
-
 main() {
-  local files cmd size
-  [[ $# -lt 1 ]] && return "$(ssh)"
+  local ssh_args host sshrc_cmd cmd size
+  while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
+    case "${opt}" in
+      -)
+        case "${OPTARG}" in
+          help)
+            show_help
+            exit 0
+            ;;
+          arg-max)
+            ARG_MAX="${!OPTIND}"
+            OPTIND=$(( OPTIND + 1 ))
+            ;;
+          arg-max=*)
+            ARG_MAX="${OPTARG#*=}"
+            ;;
+          *)
+            if [ "$OPTERR" = 1 ]; then
+              echo "Invalid option --${OPTARG}" >&2
+            fi
+            ;;
+        esac;;
+      b|c|D|E|e|F|I|i|J|L|l|m|O|o|p|Q|R|S|W|w)
+        ssh_args="${ssh_args} -${opt} -${OPTARG}"
+        ;;
+      h)
+        show_help
+        exit 0
+        ;;
+      *)
+        ssh_args="${ssh_args} -${OPTARG}"
+        ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  host="$1"
+  shift
+  cmd="$*"
 
   if [[ ! $(command -v encode) ]]; then
     echo >&2 "Error: sshrc requires openssl or base64 to be installed locally"
@@ -87,18 +158,11 @@ main() {
     done
   fi
 
-  if [[ -f "${SSHHOME}/.sshrc" ]]; then
-    files="${files} .sshrc"
-  else
-    echo >&2 "Error: could not find .sshrc in current directory or ${HOME}"
-    exit 1
-  fi
-  [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
+  sshrc_cmd="$(sshrc_cmd "$cmd")"
+  check_size "${sshrc_cmd}"
 
-  cmd="$(ssh_cmd "${files}")"
-  check_size "${cmd}"
-
-  ssh -t "$@" "${cmd}"
+  #echo "${sshrc_cmd}"
+  ssh -t ${ssh_args} "${host}" "${sshrc_cmd}"
 }
 
 main "$@"
