@@ -43,6 +43,32 @@ and run after starting the shell.
 Some shells (both locally and on the remote server) will complain if this command is too large. For this reason, sshrc will refuse to run if the command exceeds 64kb. The threshold for this check can be modified or disabled with
 .BR \-\-arg-max .
 
+.SH CONFIGURATION
+.TP
+.I $SSHHOME
+Locally, this location is a place to put all of your
+.B sshrc
+configuration files. If not set
+.B sshrc
+will check for config files in the current directory or
+.IR $HOME .
+On the remote server,
+.B sshrc
+creates a temporary
+.I $SSHHOME
+directory and copies its configuration files there.
+
+.TP
+.I $SSHHOME/.sshrc
+.B sshrc
+sources this file after logging in to a remote server. Use it to change the prompt, export variables, or define functions and aliases.
+
+.TP
+.I $SSHHOME/.sshrc.d
+.B sshrc
+will copy anything in this directory to the remote server. You can then tell programs to load their configuration from the
+.I $SSHHOME/.sshrc.d
+directory by setting the right environment variables.
 
 .SH EXAMPLES
 .B sshrc \-\-hushlogin user@host
