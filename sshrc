@@ -129,7 +129,7 @@ set_sshrc_cmd() {
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
-  eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c | $(encoder))' \
+  eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c --best | $(encoder))' \
     | \$(encoder -d) \
     | gzip -d)\"" | minify)"
 
