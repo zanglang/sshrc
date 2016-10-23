@@ -6,7 +6,7 @@ Usage: sshrc [OPTIONS] [SSH_ARGS...]
 
 Options:
   --archiver=UTILITY  Use UTILITY for compression
-                      Default is xz; gzip and bzip2 are also supported
+                      Default is bzip2; gzip and xz are also supported
   --arg-max=BYTES     Ensure SSHRC_CMD is less than BYTES in size
                       Default is 65536 (64kb); set to 0 to disable this check
   --arg-size          Print the compressed size of SSHRC_CMD in bytes and exit
@@ -144,7 +144,7 @@ set_sshrc_cmd() {
 main() {
   local ssh_args host sshrc_cmd cmd size \
     hushlogin arg_max show_size bin debug archiver
-  archiver=xz
+  archiver=bzip2
   [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
