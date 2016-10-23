@@ -5,17 +5,19 @@ cat >&2 <<EOF
 Usage: sshrc [OPTIONS] [SSH_ARGS...]
 
 Options:
-  --arg-max=BYTES   Ensure SSHRC_CMD is less than BYTES in size
-                    Default is 65536 (64kb); set to 0 to disable this check
-  --arg-size        Print the compressed size of SSHRC_CMD in bytes and exit
-  --hushlogin       Supress motd welcome messages
-                    This can also be accomplished by creating a .hushlogin
-                    file ing \$SSHHOME/.sshrc.d
-  --bin             Copy this sshrc script to the remote host
-  --debug[=LEVEL]   Print out debug info
-                    LEVEL 1 prints the SSHRC_CMD
-                    LEVEL 2 prints the uncompressed bootstrap script
-  -h, --help        Display this help message and exit
+  --archiver=UTILITY  Use UTILITY for compression
+                      Default is xz; gzip and bzip2 are also supported
+  --arg-max=BYTES     Ensure SSHRC_CMD is less than BYTES in size
+                      Default is 65536 (64kb); set to 0 to disable this check
+  --arg-size          Print the compressed size of SSHRC_CMD in bytes and exit
+  --hushlogin         Supress motd welcome messages
+                      This can also be accomplished by creating a .hushlogin
+                      file ing \$SSHHOME/.sshrc.d
+  --bin               Copy this sshrc script to the remote host
+  --debug[=LEVEL]     Print out debug info
+                      LEVEL 1 prints the SSHRC_CMD
+                      LEVEL 2 prints the uncompressed bootstrap script
+  -h, --help          Display this help message and exit
 
 SSH_ARGS:
   See ssh(1)
@@ -129,9 +131,9 @@ set_sshrc_cmd() {
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
-  eval \"\$(echo $'$(echo "${bootstrap}" | gzip -c --best | $(encoder))' \
+  eval \"\$(echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | $(encoder))' \
     | \$(encoder -d) \
-    | gzip -d)\"" | minify)"
+    | ${archiver} -d)\"" | minify)"
 
   if [[ "${debug}" == 1 ]]; then
     echo "${sshrc_cmd}"
@@ -141,7 +143,8 @@ set_sshrc_cmd() {
 
 main() {
   local ssh_args host sshrc_cmd cmd size \
-    hushlogin arg_max show_size bin debug
+    hushlogin arg_max show_size bin debug archiver
+  archiver=xz
   [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
@@ -150,6 +153,13 @@ main() {
           help)
             show_help
             exit 0
+            ;;
+          archiver)
+            archiver="${!OPTIND}"
+            OPTIND=$(( OPTIND + 1 ))
+            ;;
+          archiver=*)
+            archiver="${OPTARG#*=}"
             ;;
           arg-max)
             arg_max="${!OPTIND}"
