@@ -57,7 +57,7 @@ check_size() {
 }
 
 set_sshrc_cmd() {
-  local files welcome rc bootstrap binary
+  local files welcome bootstrap binary
 
   if [[ -f "${SSHHOME}/.sshrc" ]]; then
     files="${files} .sshrc"
@@ -69,7 +69,15 @@ set_sshrc_cmd() {
 
   # Optionally hide welcome messages
   if [[ "$#" -le 1 && "${hushlogin}" != "true" ]]; then
-    welcome="[ ! -e \"\$HOME/.hushlogin\" -a -e /etc/motd ] && cat /etc/motd"
+    welcome="
+    if [ ! -e \"\$HOME/.hushlogin\" ]; then
+      if [ -e /etc/motd ]; then
+        cat /etc/motd
+      elif [ -e /etc/update-motd.d ]; then
+        run-parts /etc/update-motd.d/ 2>/dev/null
+      fi
+    fi
+    "
   fi
 
   # Optionally copy sshrc binary, so we can run sshrc again from the new host
