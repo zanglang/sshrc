@@ -94,14 +94,55 @@ will copy anything in this directory to the remote server. You can then tell pro
 .I $SSHHOME/.sshrc.d
 directory by setting the right environment variables.
 
+.TP
+.B ALTERNATE SHELL
+.B sshrc
+uses
+.B bash
+by default. To use an alternate shell, create a
+.I $SSHHOME/.sshrc.d/sh
+file that wraps the desired shell. See
+.B EXAMPLES
+for an example with
+.BR zsh .
+
 .SH EXAMPLES
-.B sshrc \-\-hushlogin user@host
+.B $ sshrc \-\-hushlogin user@host
 
 Log into remote server
 .B host
 as the user
 .B user
 and suppress any welcome message.
+
+.B $ cat <<'EOF' > $SSHHOME/.sshrc.d/sh
+.br
+.B echo '
+.br
+.B for file in .zshenv .zprofile .zlogin; do
+.br
+.RS 2
+.B  [[ -r $HOME/$file ]] && cp {$HOME,$SSHHOME}/$file
+.br
+.RE
+.B done
+.br
+.B export PATH=$PATH:\$SSHHOME
+.br
+.B source $SSHHOME/.sshrc
+.br
+.B ' > $SSHHOME/.zshrc
+.br
+.B ZDOTDIR=$SSHHOME zsh
+.br
+.B EOF
+
+Create a wrapper script around 
+.BR zsh .
+.B sshrc
+will use this to start
+.B zsh
+as the remote shell.
 
 .SH SEE ALSO
 \fBssh\fP(1) contains more information about
