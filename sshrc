@@ -67,32 +67,31 @@ set_sshrc_cmd() {
   fi
   [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
 
-  # Optionally hide welcome messages
-  if [[ "$#" -le 1 && "${hushlogin}" != "true" ]]; then
-    welcome="
-    if [ ! -e \"\$HOME/.hushlogin\" ]; then
-      if [ -e /etc/motd ]; then
-        cat /etc/motd
-      elif [ -e /etc/update-motd.d ]; then
-        run-parts /etc/update-motd.d/ 2>/dev/null
-      fi
-    fi
-    "
-  fi
+  bootstrap="
+  # Create SSHHOME, copy .sshrc and .sshrc.d, and clean up when leaving
+  export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
+  export SSHRCCLEANUP=\$SSHHOME
+  trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
+  echo $'$(tar c -h -C "${SSHHOME}" ${files} | $(encoder))' \
+    | \$(encoder -d) \
+    | tar mx -C \$SSHHOME
+  mkdir -p \$SSHHOME/.sshrc.d
 
   # Optionally copy sshrc binary, so we can run sshrc again from the new host
+  $(
   if [[ "${bin}" == "true" ]]; then
-    binary="
+    echo "
     echo $'$(minify < "$0" | $(encoder))' \
       | \$(encoder -d) > \$SSHHOME/sshrc
-    chmod +x \$SSHHOME/sshrc
-    "
+    chmod +x \$SSHHOME/sshrc"
   fi
+  )
 
   # Start shell using .sshrc.d/sh if it exists; otherwise create a wrapper
   # around bash
+  $(
   if [[ ! -e "${SSHHOME}/.sshrc.d/sh" ]]; then
-    shell="
+    echo "
     echo '#!/usr/bin/env bash
     exec bash --rcfile <(echo \"
     # Simulate a login shell
@@ -104,23 +103,24 @@ set_sshrc_cmd() {
     source \$SSHHOME/.sshrc
     \") \"\$@\"' > \$SSHHOME/.sshrc.d/sh"
   fi
-
-  bootstrap="
-  # Create SSHHOME, copy .sshrc and .sshrc.d, and clean up when leaving
-  export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-  export SSHRCCLEANUP=\$SSHHOME
-  trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-  echo $'$(tar c -h -C "${SSHHOME}" ${files} | $(encoder))' \
-    | \$(encoder -d) \
-    | tar mx -C \$SSHHOME
-  mkdir -p \$SSHHOME/.sshrc.d
-  ${binary}
-
-  ${shell}
+  )
   chmod +x \$SSHHOME/.sshrc.d/sh
 
+  # Optionally hide welcome messages
+  $(
+  if [[ "$#" -le 1 && "${hushlogin}" != "true" ]]; then
+    echo "
+    if [ ! -e \"\$HOME/.hushlogin\" ]; then
+      if [ -e /etc/motd ]; then
+        cat /etc/motd
+      elif [ -e /etc/update-motd.d ]; then
+        run-parts /etc/update-motd.d/ 2>/dev/null
+      fi
+    fi"
+  fi
+  )
+
   # Start the shell
-  ${welcome}
   \$SSHHOME/.sshrc.d/sh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
 
   if [[ "${debug}" == 2 ]]; then
@@ -143,9 +143,11 @@ set_sshrc_cmd() {
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
-  eval \"\$(echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | $(encoder))' \
+  eval \"\$(
+  echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | $(encoder))' \
     | \$(encoder -d) \
-    | ${archiver} -d)\"" | minify)"
+    | ${archiver} -d
+  )\"" | minify)"
 
   if [[ "${debug}" == 1 ]]; then
     echo "${sshrc_cmd}"
