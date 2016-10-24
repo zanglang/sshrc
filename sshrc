@@ -41,7 +41,7 @@ minify() {
 # command is too large. Check to see if sshrc_cmd will exceed arg_max (default
 # to 64kb)
 check_size() {
-  local LC_ALL=C size="${#1}"
+  local LC_ALL=C size="${#sshrc_cmd}"
 
   if [[ "${show_size}" == "true" ]]; then
     echo "${size} bytes"
@@ -109,7 +109,7 @@ set_sshrc_cmd() {
 
   # Optionally hide welcome messages
   $(
-  if [[ "$#" -le 1 && "${hushlogin}" != "true" ]]; then
+  if [[ -z "${cmd}" && "${hushlogin}" != "true" ]]; then
     echo "
     if [ ! -e \"\$HOME/.hushlogin\" ]; then
       if [ -e /etc/motd ]; then
@@ -122,7 +122,11 @@ set_sshrc_cmd() {
   )
 
   # Start the shell
-  \$SSHHOME/.sshrc.d/sh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
+  \$SSHHOME/.sshrc.d/sh $(
+  if [[ ! -z "${cmd}" ]]; then
+    echo "-c \"${cmd}\""
+  fi
+  )"
   bootstrap=$(echo "${bootstrap}" | minify)
 
   if [[ "${debug}" == 2 ]]; then
@@ -162,6 +166,7 @@ main() {
   local ssh_args host sshrc_cmd cmd size \
     hushlogin arg_max show_size bin debug archiver
   archiver=bzip2
+  ssh_args=()
   [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
@@ -209,14 +214,14 @@ main() {
             ;;
         esac;;
       b|c|D|E|e|F|I|i|J|L|l|m|O|o|p|Q|R|S|W|w)
-        ssh_args="${ssh_args} -${opt} -${OPTARG}"
+        ssh_args+=("-${opt}" "-${OPTARG}")
         ;;
       h)
         show_help
         exit 0
         ;;
       *)
-        ssh_args="${ssh_args} -${OPTARG}"
+        ssh_args+=("-${OPTARG}")
         ;;
     esac
   done
@@ -236,10 +241,10 @@ main() {
     done
   fi
 
-  set_sshrc_cmd "$cmd"
-  check_size "${sshrc_cmd}"
+  set_sshrc_cmd
+  check_size
 
-  ssh -t ${ssh_args} "${host}" "${sshrc_cmd}"
+  ssh -t "${ssh_args[@]}" "${host}" "${sshrc_cmd}"
 }
 
 main "$@"
