@@ -26,8 +26,9 @@ EOF
 
 # Use openssl or base64
 encoder() {
-  if  [ "$(command -v openssl)" ]; then echo "openssl enc -base64 $*"
-  elif [ "$(command -v base64)" ]; then echo "base64 $*"
+  if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
+  elif [ "$(command -v base64)" ]; then base64 "$@"
+  else return 1
   fi
 }
 
@@ -57,7 +58,7 @@ check_size() {
 }
 
 set_sshrc_cmd() {
-  local files welcome bootstrap binary
+  local files bootstrap
 
   if [[ -f "${SSHHOME}/.sshrc" ]]; then
     files="${files} .sshrc"
@@ -72,8 +73,8 @@ set_sshrc_cmd() {
   export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
   export SSHRCCLEANUP=\$SSHHOME
   trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-  echo $'$(tar c -h -C "${SSHHOME}" ${files} | $(encoder))' \
-    | \$(encoder -d) \
+  echo $'$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \
+    | encoder -d \
     | tar mx -C \$SSHHOME
   mkdir -p \$SSHHOME/.sshrc.d
 
@@ -81,8 +82,8 @@ set_sshrc_cmd() {
   $(
   if [[ "${bin}" == "true" ]]; then
     echo "
-    echo $'$(minify < "$0" | $(encoder))' \
-      | \$(encoder -d) > \$SSHHOME/sshrc
+    echo $'$(minify < "$0" | encoder)' \
+      | encoder -d > \$SSHHOME/sshrc
     chmod +x \$SSHHOME/sshrc"
   fi
   )
@@ -133,19 +134,19 @@ set_sshrc_cmd() {
   # run it. The .sshrc config file and files within .sshrc.d are embedded
   # within the bootstrap script.
   sshrc_cmd="$(echo "
-  # Bail if openssl isn't installed on the remote host
-  $(declare -f encoder)
-  if [ -z \"\$(encoder)\" ]; then
+  # Bail if neither openssl nor base64 is installed on the remote host
+  if [ ! \$(command -v openssl) -a ! \$(command -v base64) ]; then
     echo >&2 \"Error: sshrc requires openssl or base64 to be installed \" \\
       \"on the server\"
     exit 1
   fi
+  $(declare -f encoder)
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
   eval \"\$(
-  echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | $(encoder))' \
-    | \$(encoder -d) \
+  echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \
+    | encoder -d \
     | ${archiver} -d
   )\"" | minify)"
 
@@ -222,7 +223,7 @@ main() {
   shift
   cmd="$*"
 
-  if [[ -z "$(encoder)" ]]; then
+  if [[ ! $(command -v openssl) && ! $(command -v base64) ]]; then
     echo >&2 "Error: sshrc requires openssl or base64 to be installed locally"
     exit 1
   fi
