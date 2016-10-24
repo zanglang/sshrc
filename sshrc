@@ -32,9 +32,9 @@ encoder() {
   fi
 }
 
-# Remove empty lines and full line comments
+# Remove empty lines, full line comments, and leading whitespace
 minify() {
-  sed '/^[[:space:]]*$/d; /^[[:space:]]*#[^!]/d; /^#$/d'
+  sed '/^[[:space:]]*$/d; /^[[:space:]]*#[^!]/d; /^#$/d; s/^[[:space:]]*//g'
 }
 
 # Some shells (both locally and on the remote server) will complain if a
