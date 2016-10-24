@@ -123,9 +123,10 @@ set_sshrc_cmd() {
 
   # Start the shell
   \$SSHHOME/.sshrc.d/sh $([[ "$#" -gt 1 ]] && echo "-c \"$*\"")"
+  bootstrap=$(echo "${bootstrap}" | minify)
 
   if [[ "${debug}" == 2 ]]; then
-    echo "${bootstrap}" | minify
+    echo "${bootstrap}"
     exit 0
   fi
 
@@ -133,7 +134,7 @@ set_sshrc_cmd() {
   # compressed sshrc bootstrap script and the commands needed to decompress and
   # run it. The .sshrc config file and files within .sshrc.d are embedded
   # within the bootstrap script.
-  sshrc_cmd="$(echo "
+  sshrc_cmd="
   # Bail if neither openssl nor base64 is installed on the remote host
   if [ ! \$(command -v openssl) -a ! \$(command -v base64) ]; then
     echo >&2 \"Error: sshrc requires openssl or base64 to be installed \" \\
@@ -148,7 +149,8 @@ set_sshrc_cmd() {
   echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \
     | encoder -d \
     | ${archiver} -d
-  )\"" | minify)"
+  )\""
+  sshrc_cmd=$(echo "${sshrc_cmd}" | minify)
 
   if [[ "${debug}" == 1 ]]; then
     echo "${sshrc_cmd}"
