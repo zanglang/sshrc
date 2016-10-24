@@ -117,6 +117,8 @@ and suppress any welcome message.
 
 .B $ cat <<'EOF' > $SSHHOME/.sshrc.d/sh
 .br
+.B #/usr/bin/env zsh
+.br
 .B echo '
 .br
 .B for file in .zshenv .zprofile .zlogin; do
@@ -127,13 +129,13 @@ and suppress any welcome message.
 .RE
 .B done
 .br
-.B export PATH=$PATH:\$SSHHOME
+.B export PATH=$PATH:\\\\$SSHHOME
 .br
 .B source $SSHHOME/.sshrc
 .br
 .B ' > $SSHHOME/.zshrc
 .br
-.B ZDOTDIR=$SSHHOME zsh
+.B ZDOTDIR=$SSHHOME exec zsh
 .br
 .B EOF
 

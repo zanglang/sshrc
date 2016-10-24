@@ -93,7 +93,8 @@ set_sshrc_cmd() {
   # around bash
   if [[ ! -e "${SSHHOME}/.sshrc.d/sh" ]]; then
     shell="
-    echo 'bash --rcfile <(echo \"
+    echo '#!/usr/bin/env bash
+    exec bash --rcfile <(echo \"
     # Simulate a login shell
     [[ -r /etc/profile ]] && source /etc/profile
     for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
