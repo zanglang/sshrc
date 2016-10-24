@@ -34,7 +34,7 @@ encoder() {
 
 # Remove empty lines and full line comments
 minify() {
-  sed '/^\s*$/d; /^\s*#[^!]/d'
+  sed '/^[[:space:]]*$/d; /^[[:space:]]*#[^!]/d; /^#$/d'
 }
 
 # Some shells (both locally and on the remote server) will complain if a
