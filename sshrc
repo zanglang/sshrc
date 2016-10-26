@@ -70,21 +70,22 @@ set_sshrc_cmd() {
 
   bootstrap="
   # Create SSHHOME, copy .sshrc and .sshrc.d, and clean up when leaving
-  export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-  export SSHRCCLEANUP=\$SSHHOME
-  trap \"rm -rf \$SSHRCCLEANUP; exit\" 0
-  echo $'$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \
-    | encoder -d \
-    | tar mx -C \$SSHHOME
-  mkdir -p \$SSHHOME/.sshrc.d
+  SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
+  SSHRCCLEANUP=\"\$SSHHOME\"
+  export SSHHOME SSHRCCLEANUP
+  trap 'rm -rf \$SSHRCCLEANUP; exit' 0
+  echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \\
+  | encoder -d \\
+  | tar mx -C \"\$SSHHOME\"
+  mkdir -p \"\$SSHHOME/.sshrc.d\"
 
   # Optionally copy sshrc binary, so we can run sshrc again from the new host
   $(
   if [[ "${bin}" == "true" ]]; then
     echo "
-    echo $'$(minify < "$0" | encoder)' \
-      | encoder -d > \$SSHHOME/sshrc
-    chmod +x \$SSHHOME/sshrc"
+    echo '$(minify < "$0" | encoder)' \\
+    | encoder -d > \"\$SSHHOME/sshrc\"
+    chmod +x \"\$SSHHOME/sshrc\""
   fi
   )
 
@@ -102,10 +103,10 @@ set_sshrc_cmd() {
     done
     export PATH=\$PATH:\$SSHHOME
     source \$SSHHOME/.sshrc
-    \") \"\$@\"' > \$SSHHOME/.sshrc.d/sh"
+    \") \"\$@\"' > \"\$SSHHOME/.sshrc.d/sh\""
   fi
   )
-  chmod +x \$SSHHOME/.sshrc.d/sh
+  chmod +x \"\$SSHHOME/.sshrc.d/sh\"
 
   # Optionally hide welcome messages
   $(
@@ -122,9 +123,9 @@ set_sshrc_cmd() {
   )
 
   # Start the shell
-  \$SSHHOME/.sshrc.d/sh $(
+  \"\$SSHHOME/.sshrc.d/sh\"$(
   if [[ ! -z "${cmd}" ]]; then
-    echo "-c \"${cmd}\""
+    echo " -c \"${cmd}\""
   fi
   )"
   bootstrap=$(echo "${bootstrap}" | minify)
@@ -140,7 +141,7 @@ set_sshrc_cmd() {
   # within the bootstrap script.
   sshrc_cmd="
   # Bail if neither openssl nor base64 is installed on the remote host
-  if [ ! \$(command -v openssl) -a ! \$(command -v base64) ]; then
+  if [ ! \"\$(command -v openssl)\" ] && [ ! \"\$(command -v base64)\" ]; then
     echo >&2 \"Error: sshrc requires openssl or base64 to be installed \" \\
       \"on the server\"
     exit 1
@@ -150,8 +151,8 @@ set_sshrc_cmd() {
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
   eval \"\$(
-  echo $'$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \
-    | encoder -d \
+  echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \\
+    | encoder -d \\
     | ${archiver} -d
   )\""
   sshrc_cmd=$(echo "${sshrc_cmd}" | minify)
