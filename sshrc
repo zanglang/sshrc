@@ -1,26 +1,26 @@
 #!/usr/bin/env bash
 
 show_help() {
-cat >&2 <<EOF
-Usage: sshrc [OPTIONS] [SSH_ARGS...]
-
-Options:
-  --archiver=UTILITY  Use UTILITY for compression
-                      Default is bzip2; gzip and xz are also supported
-  --arg-max=BYTES     Ensure SSHRC_CMD is less than BYTES in size
-                      Default is 65536 (64kb); set to 0 to disable this check
-  --arg-size          Print the compressed size of SSHRC_CMD in bytes and exit
-  --hushlogin         Supress motd welcome messages
-                      This can also be accomplished by creating a .hushlogin
-                      file ing \$SSHHOME/.sshrc.d
-  --nobin             Don't copy this sshrc script to the remote host
-  --debug[=LEVEL]     Print out debug info
-                      LEVEL 1 prints the SSHRC_CMD
-                      LEVEL 2 prints the uncompressed bootstrap script
-  -h, --help          Display this help message and exit
-
-SSH_ARGS:
-  See ssh(1)
+cat <<EOF | >&2 sed 's/^|//'
+|Usage: sshrc [OPTIONS] [SSH_ARGS...]
+|
+|Options:
+|  --archiver=UTILITY  Use UTILITY for compression
+|                      Default is bzip2; gzip and xz are also supported
+|  --arg-max=BYTES     Ensure SSHRC_CMD is less than BYTES in size
+|                      Default is 65536 (64kb); set to 0 to disable this check
+|  --arg-size          Print the compressed size of SSHRC_CMD in bytes and exit
+|  --hushlogin         Supress motd welcome messages
+|                      This can also be accomplished by creating a .hushlogin
+|                      file ing \$SSHHOME/.sshrc.d
+|  --nobin             Don't copy this sshrc script to the remote host
+|  --debug[=LEVEL]     Print out debug info
+|                      LEVEL 1 prints the SSHRC_CMD
+|                      LEVEL 2 prints the uncompressed bootstrap script
+|  -h, --help          Display this help message and exit
+|
+|SSH_ARGS:
+|  See ssh(1)
 EOF
 }
 
