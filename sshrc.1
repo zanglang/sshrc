@@ -41,8 +41,9 @@ file in
 .IR $SSHHOME/.sshrc.d .
 
 .TP
-.B \-\-bin
-Copy the sshrc script to the remote host.
+.B \-\-nobin
+Don't copy this sshrc script to the remote host. This may speed up initial ssh connections slightly. It can also be used to reduce the size of the
+.BR SSHRC_CMD .
 
 .TP
 .B \-\-debug\fR[\fI=LEVEL\fR]
