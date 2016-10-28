@@ -216,7 +216,7 @@ main() {
             ;;
         esac;;
       b|c|D|E|e|F|I|i|J|L|l|m|O|o|p|Q|R|S|W|w)
-        ssh_args+=("-${opt}" "-${OPTARG}")
+        ssh_args+=("-${opt}" "${OPTARG}")
         ;;
       h)
         show_help
