@@ -57,48 +57,22 @@ check_size() {
   fi
 }
 
-set_sshrc_cmd() {
-  local files bootstrap
+include_files() {
+  echo "# Copy over .sshrc and .sshrc.d
+  echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \\
+    | encoder -d | tar mx -C \"\$SSHHOME\""
+}
 
-  [[ -f "${SSHHOME}/.sshrc" ]] && files="${files} .sshrc"
-  [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
+include_bin() {
+  echo "# Copy sshrc binary, so we can run sshrc again from the new host
+  echo '$(minify < "$0" | encoder)' | encoder -d > \"\$SSHHOME/sshrc\"
+  chmod +x \"\$SSHHOME/sshrc\""
+}
 
-  bootstrap="
-  # Create SSHHOME, copy .sshrc and .sshrc.d, and clean up when leaving
-  SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-  SSHRCCLEANUP=\"\$SSHHOME\"
-  export SSHHOME SSHRCCLEANUP
-  trap 'rm -rf \$SSHRCCLEANUP; exit' 0
-  $(
-  if [ -z "${files}" ]; then
-    echo >&2 "Warning: running without a .sshrc file or .sshrc.d directory"
-  else
-    echo "
-    echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \\
-    | encoder -d \\
-    | tar mx -C \"\$SSHHOME\"
-    "
-  fi
-  )
-  mkdir -p \"\$SSHHOME/.sshrc.d\"
-
-  # Optionally copy sshrc binary, so we can run sshrc again from the new host
-  $(
-  if [[ "${bin}" == "true" ]]; then
-    echo "
-    echo '$(minify < "$0" | encoder)' \\
-    | encoder -d > \"\$SSHHOME/sshrc\"
-    chmod +x \"\$SSHHOME/sshrc\""
-  fi
-  )
-
-  # Start shell using .sshrc.d/sh if it exists; otherwise create a wrapper
-  # around bash
-  $(
-  if [[ ! -e "${SSHHOME}/.sshrc.d/sh" ]]; then
-    echo "
-    echo '#!/usr/bin/env bash
-    exec bash --rcfile <(echo \"
+include_bash_wrapper() {
+  echo "# Create wrapper around bash
+  echo '#!/usr/bin/env bash
+  exec bash --rcfile <(echo \"
     # Simulate a login shell
     [[ -r /etc/profile ]] && source /etc/profile
     for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
@@ -106,37 +80,75 @@ set_sshrc_cmd() {
     done
     export PATH=\$PATH:\$SSHHOME
     [[ -r \$SSHHOME/.sshrc ]] && source \$SSHHOME/.sshrc
-    \") \"\$@\"' > \"\$SSHHOME/.sshrc.d/sh\""
+  \") \"\$@\"' > \"\$SSHHOME/.sshrc.d/sh\""
+}
+
+include_welcome_msg() {
+  echo "# Show welcome messages
+  if [ ! -e \"\$HOME/.hushlogin\" ]; then
+    if [ -e /etc/motd ]; then
+      cat /etc/motd
+    elif [ -e /etc/update-motd.d ]; then
+      run-parts /etc/update-motd.d/ 2>/dev/null
+    fi
+  fi"
+}
+
+set_sshrc_cmd() {
+  local files bootstrap encoded_files encoded_bin bash_wrapper welcome_msg
+
+  [[ -f "${SSHHOME}/.sshrc" ]] && files="${files} .sshrc"
+  [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
+
+  if [ -z "${files}" ]; then
+    echo >&2 "Warning: running without a .sshrc file or .sshrc.d directory"
+  else
+    encoded_files=$(include_files)
   fi
-  )
+
+  if [[ "${bin}" == "true" ]]; then
+    encoded_bin=$(include_bin)
+  fi
+
+  if ! [[ -e "${SSHHOME}/.sshrc.d/sh" ]]; then
+    bash_wrapper=$(include_bash_wrapper)
+  fi
+
+  if [[ -z "${cmd}" && "${hushlogin}" != "true" ]]; then
+    welcome_msg=$(include_welcome_msg)
+  fi
+
+  # Create SSHHOME, copy over .sshrc and .sshrc.d, and start shell
+  bootstrap="
+  SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
+  SSHRCCLEANUP=\"\$SSHHOME\"
+  export SSHHOME SSHRCCLEANUP
+  trap 'rm -rf \$SSHRCCLEANUP; exit' 0
+
+  ${encoded_files-# DEBUG: Skipping transfer of .sshrc and .sshrc.d}
+
+  mkdir -p \"\$SSHHOME/.sshrc.d\"
+
+  ${encoded_bin-# DEBUG: Skipping transfer of sshrc binary}
+
+  ${bash_wrapper-# DEBUG: Using .sshrc.d/sh as shell}
+
   chmod +x \"\$SSHHOME/.sshrc.d/sh\"
 
-  # Optionally hide welcome messages
-  $(
-  if [[ -z "${cmd}" && "${hushlogin}" != "true" ]]; then
-    echo "
-    if [ ! -e \"\$HOME/.hushlogin\" ]; then
-      if [ -e /etc/motd ]; then
-        cat /etc/motd
-      elif [ -e /etc/update-motd.d ]; then
-        run-parts /etc/update-motd.d/ 2>/dev/null
-      fi
-    fi"
-  fi
-  )
+  ${welcome_msg-# DEBUG: Suppressing welcome messages}
 
   # Start the shell
-  \"\$SSHHOME/.sshrc.d/sh\"$(
-  if [[ ! -z "${cmd}" ]]; then
-    echo " -c \"${cmd}\""
-  fi
-  )"
-  bootstrap=$(echo "${bootstrap}" | minify)
+  \"\$SSHHOME/.sshrc.d/sh\"$([[ -z "${cmd}" ]] || echo " -c \"${cmd}\"")"
 
+  # Debug bootstrap script
   if [[ "${debug}" == 2 ]]; then
+    echo "This is the script that will be used to unpack .sshrc and .sshrc.d" \
+      "on the remote server and start the remote shell session:"
     echo "${bootstrap}"
     exit 0
   fi
+
+  bootstrap=$(echo "${bootstrap}" | minify)
 
   # This is the remote command that sshrc passes to ssh. It is comprised of the
   # compressed sshrc bootstrap script and the commands needed to decompress and
@@ -145,25 +157,29 @@ set_sshrc_cmd() {
   sshrc_cmd="
   # Bail if neither openssl nor base64 is installed on the remote host
   if [ ! \"\$(command -v openssl)\" ] && [ ! \"\$(command -v base64)\" ]; then
-    echo >&2 \"Error: sshrc requires openssl or base64 to be installed \" \\
+    echo >&2 \"Error: sshrc requires openssl or base64 to be installed\" \\
       \"on the server\"
     exit 1
   fi
+
+  # Declare encoder function
   $(declare -f encoder)
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
   eval \"\$(
   echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \\
-    | encoder -d \\
-    | ${archiver} -d
+    | encoder -d | ${archiver} -d
   )\""
-  sshrc_cmd=$(echo "${sshrc_cmd}" | minify)
 
+  # Debug sshrc_cmd
   if [[ "${debug}" == 1 ]]; then
+    echo "This is the remote command that sshrc will pass to ssh:"
     echo "${sshrc_cmd}"
     exit 0
   fi
+
+  sshrc_cmd=$(echo "${sshrc_cmd}" | minify)
 }
 
 main() {
