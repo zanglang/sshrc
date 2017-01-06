@@ -60,12 +60,7 @@ check_size() {
 set_sshrc_cmd() {
   local files bootstrap
 
-  if [[ -f "${SSHHOME}/.sshrc" ]]; then
-    files="${files} .sshrc"
-  else
-    echo >&2 "Error: could not find .sshrc in current directory or ${HOME}"
-    exit 1
-  fi
+  [[ -f "${SSHHOME}/.sshrc" ]] && files="${files} .sshrc"
   [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
 
   bootstrap="
@@ -74,9 +69,17 @@ set_sshrc_cmd() {
   SSHRCCLEANUP=\"\$SSHHOME\"
   export SSHHOME SSHRCCLEANUP
   trap 'rm -rf \$SSHRCCLEANUP; exit' 0
-  echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \\
-  | encoder -d \\
-  | tar mx -C \"\$SSHHOME\"
+  $(
+  if [ -z "${files}" ]; then
+    echo >&2 "Warning: running without a .sshrc file or .sshrc.d directory"
+  else
+    echo "
+    echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \\
+    | encoder -d \\
+    | tar mx -C \"\$SSHHOME\"
+    "
+  fi
+  )
   mkdir -p \"\$SSHHOME/.sshrc.d\"
 
   # Optionally copy sshrc binary, so we can run sshrc again from the new host
@@ -102,7 +105,7 @@ set_sshrc_cmd() {
       [[ -r \\\"\$file\\\" ]] && source \$file
     done
     export PATH=\$PATH:\$SSHHOME
-    source \$SSHHOME/.sshrc
+    [[ -r \$SSHHOME/.sshrc ]] && source \$SSHHOME/.sshrc
     \") \"\$@\"' > \"\$SSHHOME/.sshrc.d/sh\""
   fi
   )
