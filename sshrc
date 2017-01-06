@@ -26,9 +26,12 @@ EOF
 
 # Use openssl or base64
 encoder() {
-  if  [ "$(command -v openssl)" ]; then openssl enc -base64 "$@"
-  elif [ "$(command -v base64)" ]; then base64 "$@"
-  else return 1
+  if  [ "$(command -v openssl)" ]; then
+    openssl enc -base64 "$@"
+  elif [ "$(command -v base64)" ]; then
+    base64 "$@"
+  else
+    return 1
   fi
 }
 
@@ -41,15 +44,15 @@ minify() {
 # command is too large. Check to see if sshrc_cmd will exceed arg_max (default
 # to 64kb)
 check_size() {
-  local LC_ALL=C size="${#sshrc_cmd}"
+  LC_ALL=C size="${#sshrc_cmd}"
 
-  if [[ "${show_size}" == "true" ]]; then
+  if [ "${show_size}" = "true" ]; then
     echo "${size} bytes"
     exit 0
   fi
 
-  [[ "${arg_max:=$(( 65 * 1024 ))}" == 0 ]] && return
-  if [[ "${size}" -gt "${arg_max}" ]]; then
+  [ "${arg_max:=$(( 65 * 1024 ))}" = 0 ] && return
+  if [ "${size}" -gt "${arg_max}" ]; then
     echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
       "bootstrap script is greater than 64kb"
     echo >&2 "Current size: ${size} bytes"
@@ -58,107 +61,86 @@ check_size() {
 }
 
 include_files() {
-  echo "# Copy over .sshrc and .sshrc.d
-  echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \\
-    | encoder -d | tar mx -C \"\$SSHHOME\""
+read -r -d '' encoded_files <<EOF
+  # Copy over .sshrc and .sshrc.d
+  echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \
+    | encoder -d | tar mx -C "\$SSHHOME"
+EOF
 }
 
 include_bin() {
-  echo "# Copy sshrc binary, so we can run sshrc again from the new host
-  echo '$(minify < "$0" | encoder)' | encoder -d > \"\$SSHHOME/sshrc\"
-  chmod +x \"\$SSHHOME/sshrc\""
+read -r -d '' encoded_bin <<EOF
+  # Copy sshrc binary, so we can run sshrc again from the new host
+  echo '$(minify < "$0" | encoder)' | encoder -d > "\$SSHHOME/sshrc"
+  chmod +x "\$SSHHOME/sshrc"
+EOF
 }
 
 include_bash_wrapper() {
-  echo "# Create wrapper around bash
+read -r -d '' bash_wrapper <<EOF
+  # Create wrapper around bash
   echo '#!/usr/bin/env bash
-  exec bash --rcfile <(echo \"
+  exec bash --rcfile <(echo "
     # Simulate a login shell
-    [[ -r /etc/profile ]] && source /etc/profile
+    [ -r /etc/profile ] && source /etc/profile
     for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
-      [[ -r \\\"\$file\\\" ]] && source \$file
+      [ -r \"\$file\" ] && source \$file
     done
     export PATH=\$PATH:\$SSHHOME
-    [[ -r \$SSHHOME/.sshrc ]] && source \$SSHHOME/.sshrc
-  \") \"\$@\"' > \"\$SSHHOME/.sshrc.d/sh\""
+    [ -r \$SSHHOME/.sshrc ] && source \$SSHHOME/.sshrc
+  ") "\$@"' > "\$SSHHOME/.sshrc.d/sh"
+EOF
 }
 
 include_welcome_msg() {
-  echo "# Show welcome messages
-  if [ ! -e \"\$HOME/.hushlogin\" ]; then
+read -r -d '' welcome_msg <<EOF
+  # Show welcome messages
+  if [ ! -e "\$HOME/.hushlogin" ]; then
     if [ -e /etc/motd ]; then
       cat /etc/motd
     elif [ -e /etc/update-motd.d ]; then
       run-parts /etc/update-motd.d/ 2>/dev/null
     fi
-  fi"
+  fi
+EOF
 }
 
-set_sshrc_cmd() {
-  local files bootstrap encoded_files encoded_bin bash_wrapper welcome_msg
-
-  [[ -f "${SSHHOME}/.sshrc" ]] && files="${files} .sshrc"
-  [[ -d "${SSHHOME}/.sshrc.d" ]] && files="${files} .sshrc.d"
-
-  if [ -z "${files}" ]; then
-    echo >&2 "Warning: running without a .sshrc file or .sshrc.d directory"
-  else
-    encoded_files=$(include_files)
-  fi
-
-  if [[ "${bin}" == "true" ]]; then
-    encoded_bin=$(include_bin)
-  fi
-
-  if ! [[ -e "${SSHHOME}/.sshrc.d/sh" ]]; then
-    bash_wrapper=$(include_bash_wrapper)
-  fi
-
-  if [[ -z "${cmd}" && "${hushlogin}" != "true" ]]; then
-    welcome_msg=$(include_welcome_msg)
-  fi
-
-  # Create SSHHOME, copy over .sshrc and .sshrc.d, and start shell
-  bootstrap="
+# The bootstrap script creates SSHHOME, copies over .sshrc and .sshrc.d, and
+# starts the shell
+build_bootstrap_script() {
+read -r -d '' bootstrap <<EOF
   SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-  SSHRCCLEANUP=\"\$SSHHOME\"
+  SSHRCCLEANUP="\$SSHHOME"
   export SSHHOME SSHRCCLEANUP
   trap 'rm -rf \$SSHRCCLEANUP; exit' 0
 
   ${encoded_files-# DEBUG: Skipping transfer of .sshrc and .sshrc.d}
 
-  mkdir -p \"\$SSHHOME/.sshrc.d\"
+  mkdir -p "\$SSHHOME/.sshrc.d"
 
   ${encoded_bin-# DEBUG: Skipping transfer of sshrc binary}
 
   ${bash_wrapper-# DEBUG: Using .sshrc.d/sh as shell}
 
-  chmod +x \"\$SSHHOME/.sshrc.d/sh\"
+  chmod +x "\$SSHHOME/.sshrc.d/sh"
 
   ${welcome_msg-# DEBUG: Suppressing welcome messages}
 
   # Start the shell
-  \"\$SSHHOME/.sshrc.d/sh\"$([[ -z "${cmd}" ]] || echo " -c \"${cmd}\"")"
+  "\$SSHHOME/.sshrc.d/sh"$([ -z "${cmd}" ] || echo " -c \"${cmd}\"")
+EOF
+}
 
-  # Debug bootstrap script
-  if [[ "${debug}" == 2 ]]; then
-    echo "This is the script that will be used to unpack .sshrc and .sshrc.d" \
-      "on the remote server and start the remote shell session:"
-    echo "${bootstrap}"
-    exit 0
-  fi
-
-  bootstrap=$(echo "${bootstrap}" | minify)
-
-  # This is the remote command that sshrc passes to ssh. It is comprised of the
-  # compressed sshrc bootstrap script and the commands needed to decompress and
-  # run it. The .sshrc config file and files within .sshrc.d are embedded
-  # within the bootstrap script.
-  sshrc_cmd="
+# sshrc_cmd is the remote command that sshrc passes to ssh. It is comprised of
+# the compressed sshrc bootstrap script and the commands needed to decompress
+# and run it. The .sshrc config file and files within .sshrc.d are embedded
+# within the bootstrap script.
+build_sshrc_cmd() {
+read -r -d '' sshrc_cmd <<EOF
   # Bail if neither openssl nor base64 is installed on the remote host
-  if [ ! \"\$(command -v openssl)\" ] && [ ! \"\$(command -v base64)\" ]; then
-    echo >&2 \"Error: sshrc requires openssl or base64 to be installed\" \\
-      \"on the server\"
+  if [ ! "\$(command -v openssl)" ] && [ ! "\$(command -v base64)" ]; then
+    echo >&2 "Error: sshrc requires openssl or base64 to be installed" \
+      "on the server"
     exit 1
   fi
 
@@ -167,28 +149,19 @@ set_sshrc_cmd() {
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
-  eval \"\$(
-  echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \\
+  eval "\$(
+  echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \
     | encoder -d | ${archiver} -d
-  )\""
-
-  # Debug sshrc_cmd
-  if [[ "${debug}" == 1 ]]; then
-    echo "This is the remote command that sshrc will pass to ssh:"
-    echo "${sshrc_cmd}"
-    exit 0
-  fi
-
-  sshrc_cmd=$(echo "${sshrc_cmd}" | minify)
+  )"
+EOF
 }
 
-main() {
-  local ssh_args host sshrc_cmd cmd size \
-    hushlogin arg_max show_size bin debug archiver
+parse_opts() {
   archiver=bzip2
   bin="true"
   ssh_args=()
-  [[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ]] && hushlogin="true"
+  [ -e "${SSHHOME}/.sshrc.d/.hushlogin" ] && hushlogin="true"
+
   while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
     case "${opt}" in
       -)
@@ -247,22 +220,61 @@ main() {
     esac
   done
   shift $((OPTIND-1))
+
   host="$1"
   shift
   cmd="$*"
+}
 
-  if [[ ! $(command -v openssl) && ! $(command -v base64) ]]; then
+main() {
+  parse_opts "$@"
+
+  if ! [ "$(command -v openssl)" ] && ! [ "$(command -v base64)" ]; then
     echo >&2 "Error: sshrc requires openssl or base64 to be installed locally"
     exit 1
   fi
 
-  if [[ -z "${SSHHOME}" ]]; then
+  # Look for .sshrc and .sshrc.d in current directory or $HOME
+  if [ -z "${SSHHOME}" ]; then
     for SSHHOME in $PWD $HOME; do
-      [[ -f "${SSHHOME}/.sshrc" ]] && break
+      [ -f "${SSHHOME}/.sshrc" ] && break
     done
   fi
+  [ -f "${SSHHOME}/.sshrc" ]   && files="${files} .sshrc"
+  [ -d "${SSHHOME}/.sshrc.d" ] && files="${files} .sshrc.d"
+  if [ -z "${files}" ]; then
+    echo >&2 "Warning: running without a .sshrc file or .sshrc.d directory"
+  else
+    include_files
+  fi
 
-  set_sshrc_cmd
+  [ "${bin}" = "true" ] && include_bin
+  [ -e "${SSHHOME}/.sshrc.d/sh" ] || include_bash_wrapper
+  [ -z "${cmd}" ] && [ "${hushlogin}" != "true" ] && include_welcome_msg
+
+  build_bootstrap_script
+
+  # Debug bootstrap script
+  if [ "${debug}" = 2 ]; then
+    echo "This is the script that will be used to unpack .sshrc and .sshrc.d" \
+      "on the remote server and start the remote shell session:"
+    echo "${bootstrap}"
+    exit 0
+  fi
+
+  bootstrap=$(echo "${bootstrap}" | minify)
+
+  build_sshrc_cmd
+
+  # Debug sshrc_cmd
+  if [ "${debug}" = 1 ]; then
+    echo "This is the remote command that sshrc will pass to ssh:"
+    echo "${sshrc_cmd}"
+    exit 0
+  fi
+
+  sshrc_cmd=$(echo "${sshrc_cmd}" | minify)
+
   check_size
 
   ssh -t "${ssh_args[@]}" "${host}" "${sshrc_cmd}"
