@@ -21,7 +21,7 @@ read -r -d '' bootstrap <<EOF
 export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
 export SSHRCCLEANUP="\$SSHHOME"
 trap 'rm -rf \$SSHRCCLEANUP; exit' 0
-echo '${encoded_files}' | base64 -d | tar mx -C "\$SSHHOME"
+echo '${encoded_files}' | base64 --decode | tar mx -C "\$SSHHOME"
 mkdir -p "\$SSHHOME/.sshrc.d"
 echo '${bash_wrapper}' > "\$SSHHOME/.sshrc.d/sh"
 chmod +x "\$SSHHOME/.sshrc.d/sh"
