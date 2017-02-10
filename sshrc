@@ -25,11 +25,21 @@ EOF
 }
 
 # Use openssl or base64
-encoder() {
-  if  [ "$(command -v openssl)" ]; then
-    openssl enc -base64 "$@"
+encode() {
+  if [ "$(command -v openssl)" ]; then
+    openssl enc -base64
   elif [ "$(command -v base64)" ]; then
-    base64 "$@"
+    base64
+  else
+    return 1
+  fi
+}
+
+decode() {
+  if [ "$(command -v openssl)" ]; then
+    openssl enc -base64 -d
+  elif [ "$(command -v base64)" ]; then
+    base64 --decode
   else
     return 1
   fi
@@ -63,15 +73,15 @@ check_size() {
 include_files() {
 read -r -d '' encoded_files <<EOF
   # Copy over .sshrc and .sshrc.d
-  echo '$(tar c -h -C "${SSHHOME}" ${files} | encoder)' \
-    | encoder -d | tar mx -C "\$SSHHOME"
+  echo '$(tar c -h -C "${SSHHOME}" ${files} | encode)' \
+    | decode | tar mx -C "\$SSHHOME"
 EOF
 }
 
 include_bin() {
 read -r -d '' encoded_bin <<EOF
   # Copy sshrc binary, so we can run sshrc again from the new host
-  echo '$(minify < "$0" | encoder)' | encoder -d > "\$SSHHOME/sshrc"
+  echo '$(minify < "$0" | encode)' | decode > "\$SSHHOME/sshrc"
   chmod +x "\$SSHHOME/sshrc"
 EOF
 }
@@ -144,14 +154,15 @@ read -r -d '' sshrc_cmd <<EOF
     exit 1
   fi
 
-  # Declare encoder function
-  $(declare -f encoder)
+  # Declare encode function
+  $(declare -f encode)
+  $(declare -f decode)
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
   eval "\$(
-  echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encoder)' \
-    | encoder -d | ${archiver} -d
+  echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encode)' \
+    | decode | ${archiver} -d
   )"
 EOF
 }
