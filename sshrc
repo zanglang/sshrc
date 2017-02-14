@@ -118,6 +118,11 @@ EOF
 # The bootstrap script creates SSHHOME, copies over .sshrc and .sshrc.d, and
 # starts the shell
 build_bootstrap_script() {
+read -r -d '' exec_script <<EOF
+  #!/usr/bin/env sh
+  trap 'rm -rf \$SSHRCCLEANUP; exit' 0;
+  \$SSHHOME/.sshrc.d/sh$([ -z "${cmd}" ] || echo " -c \"${cmd}\"")
+EOF
 read -r -d '' bootstrap <<EOF
   SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
   SSHRCCLEANUP="\$SSHHOME"
@@ -136,8 +141,11 @@ read -r -d '' bootstrap <<EOF
 
   ${welcome_msg-# DEBUG: Suppressing welcome messages}
 
-  # Start the shell
-  "\$SSHHOME/.sshrc.d/sh"$([ -z "${cmd}" ] || echo " -c \"${cmd}\"")
+  # Create wrapper script around our shell that handles cleaning up
+  echo "${exec_script}" > "\$SSHHOME/sshrc-init"
+
+  chmod +x "\$SSHHOME/sshrc-init"
+  exec "\$SSHHOME/sshrc-init"
 EOF
 }
 
