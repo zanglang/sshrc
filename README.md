@@ -1,3 +1,24 @@
+# sshrc
+
+Bring your config files with you
+
+## Description
+
+This is a fork of [Russell91](https://github.com/Russell91)'s awesome [sshrc](https://github.com/Russell91/sshrc) utility. The original goal of this project was to refactor Russell91's script to make it more readable and more modular. Since then, I have also introduced some additional features to the script.
+
+### Improvements
+
+- Help text and man page entry
+- Supports more than one base64 encoding utility
+- Configurable compression utility (--archiver); bzip2 generally seems to work best in my experience
+- Support for defining your own shell wrapper; this can be used, for example, to start zsh instead of bash
+- Better MOTD support
+- More files can be included in .sshrc.d
+  - The original sshrc limits you to 64KB because this is the maximum command size on some machines; not all machines are limited to 64KB though, so this version makes the check configurable (--arg-max)
+  - This version allows not uploading the script itself to the remote server (--no-bin); this provides a small amount of extra space
+  - The --arg-size flag allows you to see how big the command will be
+- Debug flags that give more insight into the inner workings of the script
+
 ## Usage
 
 sshrc works just like ssh, but it also sources the ~/.sshrc on your local computer after logging in remotely.
@@ -15,8 +36,8 @@ You can use this to set environment variables, define functions, and run post-lo
 
 ## Installation
 
-    $ wget https://raw.githubusercontent.com/taylorskalyo/sshrc/master/sshrc && 
-    chmod +x sshrc && 
+    $ wget https://raw.githubusercontent.com/taylorskalyo/sshrc/master/sshrc
+    chmod +x sshrc
     sudo mv sshrc /usr/local/bin #or anywhere else on your PATH
 
 ## Advanced configuration
