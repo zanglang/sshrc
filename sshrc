@@ -13,7 +13,7 @@ cat <<EOF | >&2 sed 's/^|//'
 |  --hushlogin         Supress motd welcome messages
 |                      This can also be accomplished by creating a .hushlogin
 |                      file ing \$SSHHOME/.sshrc.d
-|  --nobin             Don't copy this sshrc script to the remote host
+|  --no-bin            Don't copy this sshrc script to the remote host
 |  --debug[=LEVEL]     Print out debug info
 |                      LEVEL 1 prints the SSHRC_CMD
 |                      LEVEL 2 prints the uncompressed bootstrap script
@@ -209,7 +209,7 @@ parse_opts() {
           arg-size)
             show_size="true"
             ;;
-          nobin)
+          no-bin)
             bin="false"
             ;;
           debug)
