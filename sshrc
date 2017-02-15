@@ -176,7 +176,6 @@ EOF
 }
 
 parse_opts() {
-  archiver=bzip2
   bin="true"
   ssh_args=()
   [ -e "${SSHHOME}/.sshrc.d/.hushlogin" ] && hushlogin="true"
@@ -240,6 +239,15 @@ parse_opts() {
   done
   shift $((OPTIND-1))
 
+  if [ -z "${archiver}" ]; then
+    for archiver in bzip2 gzip xz; do
+      [ "$(command -v "${archiver}")" ] && break
+    done
+  fi
+  if ! [ "$(command -v "${archiver}")" ]; then
+    echo >&2 "Error: could not find a suitable archive utility"
+    exit 1
+  fi
   host="$1"
   shift
   cmd="$*"
