@@ -56,15 +56,15 @@ minify() {
 check_size() {
 	LC_ALL=C size="${#sshrc_cmd}"
 
-	if [ "${show_size}" = "true" ]; then
+	if [ "${show_size}" = 'true' ]; then
 		echo "${size} bytes"
 		exit 0
 	fi
 
 	[ "${arg_max:=$(( 65 * 1024 ))}" = 0 ] && return
 	if [ "${size}" -gt "${arg_max}" ]; then
-		echo >&2 "Error: the compressed size of .sshrc, .sshrc.d, and the sshrc" \
-			"bootstrap script is greater than 64kb"
+		echo >&2 'Error: the compressed size of .sshrc, .sshrc.d, and the sshrc' \
+			'bootstrap script is greater than 64kb'
 		echo >&2 "Current size: ${size} bytes"
 		exit 1
 	fi
@@ -168,8 +168,7 @@ build_sshrc_cmd() {
 	read -r -d '' sshrc_cmd <<-EOF
 	# Bail if neither openssl nor base64 is installed on the remote host
 	if [ ! "\$(command -v openssl)" ] && [ ! "\$(command -v base64)" ]; then
-		echo >&2 "Error: sshrc requires openssl or base64 to be installed" \
-			"on the server"
+		echo >&2 'Error: sshrc requires openssl or base64 to be installed remotely'
 		exit 1
 	fi
 
@@ -184,11 +183,11 @@ build_sshrc_cmd() {
 }
 
 parse_opts() {
-	bin="true"
+	bin='true'
 	ssh_args=()
-	[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ] && hushlogin="true"
+	[ -e "${SSHHOME}/.sshrc.d/.hushlogin" ] && hushlogin='true'
 
-	while getopts ":h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:" opt; do
+	while getopts ':h-:b:c:D:E:e:F:I:i:J:L:l:m:O:o:p:Q:R:S:W:w:' opt; do
 		case "${opt}" in
 			-)
 				case "${OPTARG}" in
@@ -211,13 +210,13 @@ parse_opts() {
 						arg_max="${OPTARG#*=}"
 						;;
 					hushlogin)
-						hushlogin="true"
+						hushlogin='true'
 						;;
 					arg-size)
-						show_size="true"
+						show_size='true'
 						;;
 					no-bin)
-						bin="false"
+						bin='false'
 						;;
 					debug)
 						debug=1
@@ -253,7 +252,7 @@ parse_opts() {
 		done
 	fi
 	if ! [ "$(command -v "${archiver}")" ]; then
-		echo >&2 "Error: could not find a suitable archive utility"
+		echo >&2 'Error: could not find a suitable archive utility'
 		exit 1
 	fi
 
@@ -266,7 +265,7 @@ main() {
 	parse_opts "$@"
 
 	if ! [ "$(command -v openssl)" ] && ! [ "$(command -v base64)" ]; then
-		echo >&2 "Error: sshrc requires openssl or base64 to be installed locally"
+		echo >&2 'Error: sshrc requires openssl or base64 to be installed locally'
 		exit 1
 	fi
 
@@ -279,21 +278,21 @@ main() {
 	[ -f "${SSHHOME}/.sshrc" ]   && files="${files} .sshrc"
 	[ -d "${SSHHOME}/.sshrc.d" ] && files="${files} .sshrc.d"
 	if [ -z "${files}" ]; then
-		echo >&2 "Warning: running without a .sshrc file or .sshrc.d directory"
+		echo >&2 'Warning: running without a .sshrc file or .sshrc.d directory'
 	else
 		include_files
 	fi
 
-	[ "${bin}" = "true" ] && include_bin
+	[ "${bin}" = 'true' ] && include_bin
 	[ -e "${SSHHOME}/.sshrc.d/sh" ] || include_bash_wrapper
-	[ -z "${cmd}" ] && [ "${hushlogin}" != "true" ] && include_welcome_msg
+	[ -z "${cmd}" ] && [ "${hushlogin}" != 'true' ] && include_welcome_msg
 
 	build_bootstrap_script
 
 	# Debug bootstrap script
 	if [ "${debug}" = 2 ]; then
-		echo "This is the script that will be used to unpack .sshrc and .sshrc.d" \
-			"on the remote server and start the remote shell session:"
+		echo 'This is the script that will be used to unpack .sshrc and .sshrc.d' \
+			'on the remote server and start the remote shell session:'
 		echo "${bootstrap}"
 		exit 0
 	fi
@@ -304,7 +303,7 @@ main() {
 
 	# Debug sshrc_cmd
 	if [ "${debug}" = 1 ]; then
-		echo "This is the remote command that sshrc will pass to ssh:"
+		echo 'This is the remote command that sshrc will pass to ssh:'
 		echo "${sshrc_cmd}"
 		exit 0
 	fi
