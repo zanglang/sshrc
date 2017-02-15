@@ -71,34 +71,39 @@ check_size() {
 }
 
 include_files() {
+_encoded_files=$(tar c -h -C "${SSHHOME}" ${files} | encode)
 read -r -d '' encoded_files <<EOF
   # Copy over .sshrc and .sshrc.d
-  echo '$(tar c -h -C "${SSHHOME}" ${files} | encode)' \
-    | decode | tar mx -C "\$SSHHOME"
+  echo '${_encoded_files}' | decode | tar mx -C "\$SSHHOME"
 EOF
 }
 
 include_bin() {
+_encoded_bin=$(minify < "$0" | encode)
 read -r -d '' encoded_bin <<EOF
   # Copy sshrc binary, so we can run sshrc again from the new host
-  echo '$(minify < "$0" | encode)' | decode > "\$SSHHOME/sshrc"
+  echo '${_encoded_bin}' | decode > "\$SSHHOME/sshrc"
   chmod +x "\$SSHHOME/sshrc"
 EOF
 }
 
 include_bash_wrapper() {
+read -r -d '' bashrc <<EOF
+  # Simulate a login shell
+  [ -r /etc/profile ] && source /etc/profile
+  for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
+    [ -r \"\$file\" ] && source \$file && break
+  done
+  export PATH=\$PATH:\$SSHHOME
+  [ -r \$SSHHOME/.sshrc ] && source \$SSHHOME/.sshrc
+EOF
+read -r -d '' sh_file <<EOF
+  #!/usr/bin/env bash
+  exec bash --rcfile <(echo "${bashrc}") "\$@"
+EOF
 read -r -d '' bash_wrapper <<EOF
   # Create wrapper around bash
-  echo '#!/usr/bin/env bash
-  exec bash --rcfile <(echo "
-    # Simulate a login shell
-    [ -r /etc/profile ] && source /etc/profile
-    for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
-      [ -r \"\$file\" ] && source \$file && break
-    done
-    export PATH=\$PATH:\$SSHHOME
-    [ -r \$SSHHOME/.sshrc ] && source \$SSHHOME/.sshrc
-  ") "\$@"' > "\$SSHHOME/.sshrc.d/sh"
+  echo '${sh_file}' > "\$SSHHOME/.sshrc.d/sh"
 EOF
 }
 
@@ -154,6 +159,7 @@ EOF
 # and run it. The .sshrc config file and files within .sshrc.d are embedded
 # within the bootstrap script.
 build_sshrc_cmd() {
+_encoded_bootstrap=$(echo "${bootstrap}" | "${archiver}" -c -9 | encode)
 read -r -d '' sshrc_cmd <<EOF
   # Bail if neither openssl nor base64 is installed on the remote host
   if [ ! "\$(command -v openssl)" ] && [ ! "\$(command -v base64)" ]; then
@@ -168,10 +174,7 @@ read -r -d '' sshrc_cmd <<EOF
 
   # Compress bootstrap script for faster initial ssh connection and reduced
   # risk of hitting command buffer length limit
-  eval "\$(
-  echo '$(echo "${bootstrap}" | "${archiver}" -c -9 | encode)' \
-    | decode | ${archiver} -d
-  )"
+  eval "\$(echo '${_encoded_bootstrap}' | decode | ${archiver} -d)"
 EOF
 }
 
