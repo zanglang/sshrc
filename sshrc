@@ -3,29 +3,11 @@
 [ -f "${SSHHOME:=$HOME}/.sshrc" ] && files="${files} .sshrc"
 [ -d "${SSHHOME}/.sshrc.d" ]      && files="${files} .sshrc.d"
 
-encoded_files=$(tar c -h -C "${SSHHOME}" ${files} | base64)
+encoded_files=$(tar cz -h -C "${SSHHOME}" ${files} | base64)
 
-read -r -d '' bash_wrapper <<EOF
-#!/usr/bin/env bash
-exec bash --rcfile <(echo "
-[ -r /etc/profile ] && source /etc/profile
-for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
-  [ -r \"\$file\" ] && source \$file
-done
-export PATH=\$PATH:\$SSHHOME
-[ -r \$SSHHOME/.sshrc ] && source \$SSHHOME/.sshrc
-") "\$@"
-EOF
-
-read -r -d '' bootstrap <<EOF
+ssh -t "$@" "
 export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-export SSHRCCLEANUP="\$SSHHOME"
-trap 'rm -rf \$SSHRCCLEANUP; exit' 0
-echo '${encoded_files}' | base64 --decode | tar mx -C "\$SSHHOME"
-mkdir -p "\$SSHHOME/.sshrc.d"
-echo '${bash_wrapper}' > "\$SSHHOME/.sshrc.d/sh"
-chmod +x "\$SSHHOME/.sshrc.d/sh"
-"\$SSHHOME/.sshrc.d/sh"
-EOF
-
-ssh -t "$@" "${bootstrap}"
+trap 'rm -rf \$SSHHOME; exit' 0
+echo '${encoded_files}' | base64 --decode | tar mxz -C \$SSHHOME
+bash --rcfile \$SSHHOME/.sshrc
+"
