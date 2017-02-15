@@ -94,7 +94,7 @@ read -r -d '' bash_wrapper <<EOF
     # Simulate a login shell
     [ -r /etc/profile ] && source /etc/profile
     for file in \$HOME/{.bash_profile,.bash_login,.profile}; do
-      [ -r \"\$file\" ] && source \$file
+      [ -r \"\$file\" ] && source \$file && break
     done
     export PATH=\$PATH:\$SSHHOME
     [ -r \$SSHHOME/.sshrc ] && source \$SSHHOME/.sshrc
