@@ -1,13 +1,3 @@
 #!/usr/bin/env bash
 
-[ -f "${SSHHOME:=$HOME}/.sshrc" ] && files="${files} .sshrc"
-[ -d "${SSHHOME}/.sshrc.d" ]      && files="${files} .sshrc.d"
-
-encoded_files=$(tar cz -h -C "${SSHHOME}" ${files} | base64)
-
-ssh -t "$@" "
-export SSHHOME=\$(mktemp -d -t .$(whoami).sshrc.XXXXXXXX)
-trap 'rm -rf \$SSHHOME; exit' 0
-echo '${encoded_files}' | base64 --decode | tar mxz -C \$SSHHOME
-bash --rcfile \$SSHHOME/.sshrc
-"
+ssh -t "$@" "bash --rcfile <(echo '$(openssl enc -base64 < "${SSHHOME:=$HOME}/.sshrc")' | openssl enc -base64 -d)"
