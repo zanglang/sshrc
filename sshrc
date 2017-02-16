@@ -71,8 +71,7 @@ check_size() {
 }
 
 include_files() {
-	_encoded_files=$(tar c -h -C "${SSHHOME}" ${files} | encode)
-
+	_encoded_files=$(tar c -h -C "${SSHHOME}" "${files[@]}" | encode)
 	read -r -d '' encoded_files <<-EOF
 	# Copy over .sshrc and .sshrc.d
 	echo '${_encoded_files}' | decode | tar mx -C "\$SSHHOME"
@@ -81,7 +80,6 @@ include_files() {
 
 include_bin() {
 	_encoded_bin=$(minify < "$0" | encode)
-
 	read -r -d '' encoded_bin <<-EOF
 	# Copy sshrc binary, so we can run sshrc again from the new host
 	echo '${_encoded_bin}' | decode > "\$SSHHOME/sshrc"
@@ -275,9 +273,10 @@ main() {
 			[ -f "${SSHHOME}/.sshrc" ] && break
 		done
 	fi
-	[ -f "${SSHHOME}/.sshrc" ]   && files="${files} .sshrc"
-	[ -d "${SSHHOME}/.sshrc.d" ] && files="${files} .sshrc.d"
-	if [ -z "${files}" ]; then
+	files=()
+	[ -f "${SSHHOME}/.sshrc" ]   && files+=(".sshrc")
+	[ -d "${SSHHOME}/.sshrc.d" ] && files+=(".sshrc.d")
+	if [ "${#files[@]}" -eq 0 ]; then
 		echo >&2 'Warning: running without a .sshrc file or .sshrc.d directory'
 	else
 		include_files
