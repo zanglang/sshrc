@@ -100,12 +100,18 @@ include_bash_wrapper() {
 
 	read -r -d '' sh_file <<-EOF
 	#!/usr/bin/env bash
-	exec bash --rcfile <(echo "${bashrc}") "\$@"
+	exec bash --rcfile <(
+	cat <<'BASHRC'
+	${bashrc}
+	BASHRC
+	) "\$@"
 	EOF
 
 	read -r -d '' bash_wrapper <<-EOF
 	# Create wrapper around bash
-	echo '${sh_file}' > "\$SSHHOME/.sshrc.d/sh"
+	cat <<'SHFILE' > "\$SSHHOME/.sshrc.d/sh"
+	${sh_file}
+	SHFILE
 	EOF
 }
 
@@ -150,7 +156,9 @@ build_bootstrap_script() {
 	${welcome_msg-# DEBUG: Suppressing welcome messages}
 
 	# Create wrapper script around our shell that handles cleaning up
-	echo "${exec_script}" > "\$SSHHOME/sshrc-init"
+	cat <<'EXECSCRIPT' > "\$SSHHOME/sshrc-init"
+	${exec_script}
+	EXECSCRIPT
 
 	chmod +x "\$SSHHOME/sshrc-init"
 	exec "\$SSHHOME/sshrc-init"
@@ -311,6 +319,7 @@ main() {
 
 	check_size
 
+	# shellcheck disable=SC2029
 	ssh -t "${ssh_args[@]}" "${host}" "${sshrc_cmd}"
 }
 
