@@ -172,6 +172,13 @@ build_sshrc_cmd() {
 		exit 1
 	fi
 
+	# Bail if the chosen archiver is not installed on the remote host
+	if [ ! "\$(command -v ${archiver})" ]; then
+		echo >&2 'Error: ${archiver} is not installed remotely; specify a' \
+			'different archive utility using the --archiver flag'
+		exit 1
+	fi
+
 	# Declare encode function
 	$(declare -f encode)
 	$(declare -f decode)
