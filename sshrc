@@ -132,7 +132,6 @@ include_welcome_msg() {
 # starts the shell
 build_bootstrap_script() {
 	read -r -d '' exec_script <<-EOF
-	#!/usr/bin/env sh
 	trap 'rm -rf \$SSHRCCLEANUP; exit' 0;
 	\$SSHHOME/.sshrc.d/sh$([ -z "${cmd}" ] || echo " -c \"${cmd}\"")
 	EOF
@@ -156,12 +155,7 @@ build_bootstrap_script() {
 	${welcome_msg-# DEBUG: Suppressing welcome messages}
 
 	# Create wrapper script around our shell that handles cleaning up
-	cat <<'EXECSCRIPT' > "\$SSHHOME/sshrc-init"
-	${exec_script}
-	EXECSCRIPT
-
-	chmod +x "\$SSHHOME/sshrc-init"
-	exec "\$SSHHOME/sshrc-init"
+	exec /usr/bin/env sh <(echo "${exec_script}")
 	EOF
 }
 
