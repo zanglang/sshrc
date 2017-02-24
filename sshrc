@@ -63,9 +63,8 @@ check_size() {
 
 	[ "${arg_max:=$(( 65 * 1024 ))}" = 0 ] && return
 	if [ "${size}" -gt "${arg_max}" ]; then
-		echo >&2 'Error: the compressed size of .sshrc, .sshrc.d, and the sshrc' \
-			'bootstrap script is greater than 64kb'
-		echo >&2 "Current size: ${size} bytes"
+		echo >&2 'Error: arg-size exceeds arg-max'
+		echo >&2 "Current size: ${size} bytes; Max: ${arg_max} bytes"
 		exit 1
 	fi
 }
@@ -174,8 +173,8 @@ build_sshrc_cmd() {
 
 	# Bail if the chosen archiver is not installed on the remote host
 	if [ ! "\$(command -v ${archiver})" ]; then
-		echo >&2 'Error: ${archiver} is not installed remotely; specify a' \
-			'different archive utility using the --archiver flag'
+		echo >&2 'Error: ${archiver} is not installed remotely'
+		echo >&2 'Use the --archiver flag to specify a different archive utility'
 		exit 1
 	fi
 
@@ -299,9 +298,9 @@ main() {
 
 	# Debug bootstrap script
 	if [ "${debug}" = 2 ]; then
-		echo 'This is the script that will be used to unpack .sshrc and .sshrc.d' \
-			'on the remote server and start the remote shell session:'
+		echo >&2 '----- BEGIN BOOTSTRAP SCRIPT -----'
 		echo "${bootstrap}"
+		echo >&2 '----- END BOOTSTRAP SCRIPT -----'
 		exit 0
 	fi
 
@@ -311,8 +310,9 @@ main() {
 
 	# Debug sshrc_cmd
 	if [ "${debug}" = 1 ]; then
-		echo 'This is the remote command that sshrc will pass to ssh:'
+		echo >&2 '----- BEGIN SSH COMMAND -----'
 		echo "${sshrc_cmd}"
+		echo >&2 '----- END SSH COMMAND -----'
 		exit 0
 	fi
 
