@@ -132,7 +132,7 @@ include_welcome_msg() {
 build_bootstrap_script() {
 	read -r -d '' exec_script <<-EOF
 	trap 'rm -rf \$SSHRCCLEANUP; exit' 0;
-	\$SSHHOME/.sshrc.d/sh$([ -z "${cmd}" ] || echo " -c \"${cmd}\"")
+	\$SSHHOME/.sshrc.d/sh$([ -z "${cmd}" ] || echo " -c '${cmd}'")
 	EOF
 
 	read -r -d '' bootstrap <<-EOF
